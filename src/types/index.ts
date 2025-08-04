@@ -6,6 +6,7 @@ export interface Asset {
   symbol: string
   decimals: number
   assetType?: string
+  multiLocationsMetadata?: any // This can be a complex object structure
   underlyingAsset?: {
     id: string
     symbol: string

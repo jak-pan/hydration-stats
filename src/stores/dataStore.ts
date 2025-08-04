@@ -48,6 +48,7 @@ export const useDataStore = defineStore('data', () => {
   const assets = ref<Asset[]>([])
   const aavePools = ref<AavepoolHistoricalData[]>([])
   const omnipoolData = ref<OmnipoolAssetData[]>([])
+  const showH2O = ref<boolean>(false)
   const stablepoolData = ref<StableswapPoolData[]>([])
   const xykPoolData = ref<XYKPoolData[]>([])
   const loading = ref(false)
@@ -60,8 +61,10 @@ export const useDataStore = defineStore('data', () => {
     timestamp?: Date 
   } | null>(null)
   const priceData = ref<{ [assetId: string]: number }>({}) // Store USD prices by asset ID
-  const historicalTVLData = ref<HistoricalTVLData[]>([])
-  const historicalAssetData = ref<{ [assetId: string]: number[] }>({})
+  const historicalTVLDataAll = ref<HistoricalTVLData[]>([])
+  const historicalTVLDataNoH2O = ref<HistoricalTVLData[]>([])
+  const historicalAssetDataAll = ref<{ [assetId: string]: number[] }>({})
+  const historicalAssetDataNoH2O = ref<{ [assetId: string]: number[] }>({})
   
   // Cache for different time periods
   const historicalDataCache = ref<{
@@ -115,20 +118,21 @@ export const useDataStore = defineStore('data', () => {
     
     omnipoolData.value.forEach(pool => {
       const assetIdStr = String(pool.assetId)
+      
+      // Skip H2O asset (ID: 1) if showH2O is false
+      if (!showH2O.value && assetIdStr === '1') {
+        console.log(`TVL calc - Skipping H2O asset (ID: 1) as showH2O is false`)
+        return
+      }
+      
       const asset = assets.value.find(a => a.id === assetIdStr)
       const decimals = asset?.decimals || 12
-      
-      console.log(`TVL calc - Asset ID: ${assetIdStr}, decimals: ${decimals}, asset found:`, asset ? `${asset.symbol} (${asset.name})` : 'NOT FOUND')
       
       const tokenBalance = extractBalance(pool.balances, decimals, assetIdStr)
       const usdValue = getUsdValue(tokenBalance, assetIdStr)
       
       omnipoolTvlTokens += tokenBalance
       omnipoolTvlUsd += usdValue
-      
-      if (usdValue > 0) {
-        console.log(`  - ${asset?.symbol || assetIdStr}: ${tokenBalance.toFixed(2)} tokens, $${usdValue.toFixed(2)} USD`)
-      }
     })
 
     const moneyMarketTvl = aavePools.value.reduce((sum, pool) => {
@@ -154,9 +158,13 @@ export const useDataStore = defineStore('data', () => {
       })
     }
 
-    console.log(`Total Omnipool TVL: ${omnipoolTvlTokens.toFixed(2)} tokens, $${omnipoolTvlUsd.toFixed(2)} USD`)
-    console.log(`Total Stablepool TVL: $${stablepoolTvl.toFixed(2)} USD from ${stablepoolData.value.length} pools`)
-    console.log(`Total XYK TVL: $${xykTvl.toFixed(2)} USD from ${xykPoolData.value?.length || 0} pools`)
+    const tvlSummary = {
+      omnipool: { tokens: omnipoolTvlTokens.toFixed(2), usd: omnipoolTvlUsd.toFixed(2) },
+      stablepool: { usd: stablepoolTvl.toFixed(2), pools: stablepoolData.value.length },
+      xyk: { usd: xykTvl.toFixed(2), pools: xykPoolData.value?.length || 0 },
+      moneyMarket: { usd: moneyMarketTvl.toFixed(2) }
+    }
+    console.log('TVL Summary:', tvlSummary)
 
     return {
       total: omnipoolTvlUsd + stablepoolTvl + xykTvl + moneyMarketTvl, // Return USD total
@@ -169,15 +177,27 @@ export const useDataStore = defineStore('data', () => {
     }
   })
 
+  // Computed properties to return appropriate data based on H2O toggle
+  const historicalTVLData = computed(() => {
+    return showH2O.value ? historicalTVLDataAll.value : historicalTVLDataNoH2O.value
+  })
+
+  const historicalAssetData = computed(() => {
+    return showH2O.value ? historicalAssetDataAll.value : historicalAssetDataNoH2O.value
+  })
+
   const assetComposition = computed<AssetComposition[]>(() => {
     const totalTvlUsd = tvlData.value.total
     if (totalTvlUsd === 0) return []
 
     const compositions: AssetComposition[] = []
     
-    console.log('Asset composition: Omnipool assets:', omnipoolData.value.length)
-    console.log('Asset composition: Stablepool pools:', stablepoolData.value.length)
-    console.log('Asset composition: XYK pools:', xykPoolData.value?.length || 0)
+    const compositionSummary = {
+      omnipool: omnipoolData.value.length,
+      stablepool: stablepoolData.value.length,
+      xyk: xykPoolData.value?.length || 0
+    }
+    console.log('Asset composition summary:', compositionSummary)
     
     // Add Omnipool assets
     omnipoolData.value.forEach(pool => {
@@ -192,20 +212,22 @@ export const useDataStore = defineStore('data', () => {
         const whaleAsset = (pool as any)._asset
         asset = {
           id: assetIdStr,
+          assetRegistryId: whaleAsset.assetRegistryId,
           name: whaleAsset.name || `Unknown Asset ${assetIdStr}`,
           symbol: whaleAsset.symbol || `UNK${assetIdStr.slice(-2)}`,
           decimals: whaleAsset.decimals || 18,
-          assetType: assetIdStr.startsWith('0x') ? 'Erc20' : 'Token'
+          assetType: whaleAsset.assetType,
+          multiLocationsMetadata: whaleAsset.multiLocationsMetadata
         }
         
         // Also add it to the assets array for future use
         assets.value.push(asset)
-        console.log(`Added asset from Omnipool data: ${asset.symbol} (${assetIdStr})`)
+        // Asset added from Omnipool data
       }
       
       // For debugging hex assets
       if (assetIdStr.startsWith('0x') && !asset) {
-        console.log(`EVM asset ${assetIdStr} still not found after whale indexer check`)
+        // EVM asset not found after whale indexer check
       }
       
       const finalAsset = asset || {
@@ -232,7 +254,7 @@ export const useDataStore = defineStore('data', () => {
     // Add Stablepool assets
     stablepoolData.value.forEach((pool, poolIndex) => {
       const poolName = pool.shareToken?.name || pool.shareToken?.symbol || `Pool ${pool.poolId}`
-      console.log(`Processing stablepool ${poolIndex + 1}: ${poolName} with ${pool.assets.length} assets`)
+      const stableAssetResults: string[] = []
       
       pool.assets.forEach((poolAsset, assetIndex) => {
         const assetIdStr = String(poolAsset.assetId)
@@ -242,10 +264,12 @@ export const useDataStore = defineStore('data', () => {
         if (!asset && poolAsset.asset) {
           asset = {
             id: assetIdStr,
+            assetRegistryId: poolAsset.asset.assetRegistryId,
             name: poolAsset.asset.name || `Unknown Asset`,
             symbol: poolAsset.asset.symbol || 'UNK',
             decimals: poolAsset.asset.decimals || 18,
-            assetType: assetIdStr.startsWith('0x') ? 'Erc20' : 'Token'
+            assetType: poolAsset.asset.assetType,
+            multiLocationsMetadata: poolAsset.asset.multiLocationsMetadata
           }
           // Add to assets array
           assets.value.push(asset)
@@ -262,7 +286,7 @@ export const useDataStore = defineStore('data', () => {
         const tvl = parseFloat(poolAsset.freeBalance || '0') / Math.pow(10, finalAsset.decimals)
         const tvlUsd = parseFloat(poolAsset.tvlInRefAssetNorm || '0')
         
-        console.log(`  Asset ${assetIndex + 1}: ${finalAsset.symbol} - TVL: $${tvlUsd.toFixed(2)}`)
+        stableAssetResults.push(`${finalAsset.symbol}: $${tvlUsd.toFixed(2)}`)
         
         compositions.push({
           asset: finalAsset,
@@ -274,6 +298,10 @@ export const useDataStore = defineStore('data', () => {
           poolName
         })
       })
+      
+      if (stableAssetResults.length > 0) {
+        console.log(`Stablepool ${poolIndex + 1} (${poolName}):`, stableAssetResults.join(', '))
+      }
     })
     
     // Add Money Market assets
@@ -288,10 +316,12 @@ export const useDataStore = defineStore('data', () => {
       if (!asset) {
         asset = {
           id: reserveAsset.id,
+          assetRegistryId: (reserveAsset as any).assetRegistryId,
           name: reserveAsset.name,
           symbol: reserveAsset.symbol,
           decimals: 12, // Default for Hydration assets
-          assetType: 'Token'
+          assetType: reserveAsset.assetType || 'Token',
+          multiLocationsMetadata: (reserveAsset as any).multiLocationsMetadata
         }
         assets.value.push(asset)
         console.log(`  Added money market asset: ${asset.symbol}`)
@@ -324,7 +354,7 @@ export const useDataStore = defineStore('data', () => {
         const poolName = `${pool.assetA?.symbol || 'Unknown'} / ${pool.assetB?.symbol || 'Unknown'}`
         const poolTvl = parseFloat(pool.tvlInRefAssetNorm || '0')
         
-        console.log(`Processing XYK pool ${poolIndex + 1}: ${poolName} (TVL: $${poolTvl.toFixed(2)})`)
+        const xykAssetResults: string[] = []
         
         // Add both assets from the pool
         const poolAssets = [pool.assetA, pool.assetB].filter(Boolean)
@@ -339,10 +369,12 @@ export const useDataStore = defineStore('data', () => {
         if (!asset) {
           asset = {
             id: assetIdStr,
+            assetRegistryId: (poolAsset as any).assetRegistryId,
             name: poolAsset.name || `Unknown Asset`,
             symbol: poolAsset.symbol || 'UNK',
             decimals: poolAsset.decimals || 12,
-            assetType: assetIdStr.startsWith('0x') ? 'Erc20' : 'Token'
+            assetType: poolAsset.assetType,
+            multiLocationsMetadata: (poolAsset as any).multiLocationsMetadata
           }
           assets.value.push(asset)
           console.log(`  Added XYK asset: ${asset.symbol}`)
@@ -352,7 +384,7 @@ export const useDataStore = defineStore('data', () => {
         const tvlUsd = poolTvl / 2
         const tvl = parseFloat(balance || '0') / Math.pow(10, asset.decimals)
         
-        console.log(`  Asset ${assetIndex + 1}: ${asset.symbol} - TVL: $${tvlUsd.toFixed(2)}, Tokens: ${tvl.toFixed(2)}`)
+        xykAssetResults.push(`${asset.symbol}: $${tvlUsd.toFixed(2)}`)
         
         compositions.push({
           asset,
@@ -364,10 +396,22 @@ export const useDataStore = defineStore('data', () => {
           poolName
           })
         })
+        
+        if (xykAssetResults.length > 0) {
+          console.log(`XYK ${poolIndex + 1} (${poolName}, $${poolTvl.toFixed(2)}):`, xykAssetResults.join(', '))
+        }
       })
     }
     
     console.log(`Total compositions: ${compositions.length} (Omnipool: ${compositions.filter(c => c.category === 'omnipool').length}, Stablepool: ${compositions.filter(c => c.category === 'stablepool').length}, XYK: ${compositions.filter(c => c.category === 'xyk').length}, Money Market: ${compositions.filter(c => c.category === 'moneymarket').length})`)
+    
+    // Debug: Show asset types in first 5 compositions
+    console.log('Asset types in compositions:', compositions.slice(0, 5).map(c => ({
+      symbol: c.asset.symbol,
+      assetType: c.asset.assetType,
+      id: c.asset.id,
+      category: c.category
+    })))
     
     return compositions.sort((a, b) => b.tvlUsd - a.tvlUsd) // Sort by USD value
   })
@@ -514,19 +558,29 @@ export const useDataStore = defineStore('data', () => {
 
   async function fetchAllAssetsPaginated() {
     try {
-      console.log('Fetching all assets...')
-      const response = await genericClient.request(GET_ALL_ASSETS)
+      console.log('Fetching all assets from whale indexer...')
+      const response = await aaveClient.request(GET_ALL_ASSETS)
       
       console.log(`Fetched ${response.assets.nodes.length} assets`)
       
-      // Show assets with their decimals
-      const assetsWithDecimals = response.assets.nodes.map((a: Asset) => ({ 
+      // Show assets with their decimals and types
+      const assetsWithDetails = response.assets.nodes.map((a: Asset) => ({ 
         id: a.id, 
+        registryId: a.assetRegistryId,
         symbol: a.symbol, 
         name: a.name, 
-        decimals: a.decimals 
+        decimals: a.decimals,
+        assetType: a.assetType
       }))
-      console.log('All assets with decimals:', assetsWithDecimals)
+      console.log('All assets with details:', assetsWithDetails.slice(0, 10))
+      
+      // Check for specific asset types
+      const assetTypes = response.assets.nodes.reduce((acc: any, asset: Asset) => {
+        const type = asset.assetType || 'undefined';
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('Asset type distribution:', assetTypes)
       
       // Show specific assets we're looking for
       const importantAssets = ['0', '1', '10', '100', '102', '1000794', '1000795', '12', '14', '15', '16', '17', '19', '20', '27', '31', '69']
@@ -546,19 +600,32 @@ export const useDataStore = defineStore('data', () => {
       const erc20Assets = response.assets.nodes.filter((a: Asset) => a.assetType === 'Erc20')
       console.log(`Found ${erc20Assets.length} ERC20 assets:`, erc20Assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name })))
       
+      // Debug: Show first 10 assets with their types to verify GraphQL data
+      console.log('First 10 assets with types:', response.assets.nodes.slice(0, 10).map(a => ({ 
+        id: a.id, 
+        symbol: a.symbol, 
+        assetType: a.assetType,
+        registryId: a.assetRegistryId 
+      })))
+      
       assets.value = response.assets.nodes
     } catch (err) {
-      console.error('Error fetching all assets:', err)
-      // Fallback to simple fetch
+      console.error('Error fetching all assets from whale indexer:', err)
+      console.log('Falling back to generic endpoint for basic asset info...')
+      // Fallback to simple fetch from generic endpoint
       await fetchAssets()
     }
   }
 
   async function fetchAssets() {
     try {
-      console.log('Fetching assets (fallback)...')
+      console.log('Fetching assets from generic endpoint (fallback)...')
       const response = await genericClient.request(GET_ASSETS)
-      console.log('Assets response:', response)
+      console.log('Assets response from generic endpoint:', response)
+      console.log(`Fetched ${response.assets.nodes.length} assets from generic endpoint`)
+      
+      // Note: Generic endpoint doesn't have assetRegistryId or multiLocationsMetadata
+      // but it has basic asset info including assetType
       assets.value = response.assets.nodes
     } catch (err) {
       console.error('Error fetching assets:', err)
@@ -778,10 +845,12 @@ export const useDataStore = defineStore('data', () => {
       const nowTimestamp = Date.now()
       const cacheTimeout = 5 * 60 * 1000 // 5 minutes
       
-      if (cached && (nowTimestamp - cached.timestamp) < cacheTimeout) {
+      if (cached && cached.tvlDataAll && (nowTimestamp - cached.timestamp) < cacheTimeout) {
         console.log(`Using cached data for period: ${period}`)
-        historicalTVLData.value = cached.tvlData
-        historicalAssetData.value = cached.assetData
+        historicalTVLDataAll.value = cached.tvlDataAll
+        historicalTVLDataNoH2O.value = cached.tvlDataNoH2O
+        historicalAssetDataAll.value = cached.assetDataAll
+        historicalAssetDataNoH2O.value = cached.assetDataNoH2O
         return
       }
       
@@ -949,15 +1018,22 @@ export const useDataStore = defineStore('data', () => {
       })
       
       // Process data by block height
-      const historicalData: HistoricalTVLData[] = []
+      const historicalDataAll: HistoricalTVLData[] = []
+      const historicalDataNoH2O: HistoricalTVLData[] = []
       
       selectedBlocks.forEach(block => {
         const blockHeight = block.height
         const date = new Date(block.timestamp)
         
-        // Calculate Omnipool TVL for this block
-        const omnipoolTvl = omnipoolHist.omnipoolAssetHistoricalData.nodes
+        // Calculate Omnipool TVL for this block (all assets)
+        const omnipoolNodes = omnipoolHist.omnipoolAssetHistoricalData.nodes
           .filter((node: any) => node.paraBlockHeight === blockHeight)
+        
+        const omnipoolTvlAll = omnipoolNodes
+          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
+        
+        const omnipoolTvlNoH2O = omnipoolNodes
+          .filter((node: any) => String(node.assetId) !== '1') // Exclude H2O
           .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
         
         // Calculate Stablepool TVL for this block
@@ -975,29 +1051,43 @@ export const useDataStore = defineStore('data', () => {
           .filter((node: any) => node.paraBlockHeight === blockHeight)
           .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
         
-        const total = omnipoolTvl + stablepoolTvl + xykTvl + moneyMarketTvl
+        const totalAll = omnipoolTvlAll + stablepoolTvl + xykTvl + moneyMarketTvl
+        const totalNoH2O = omnipoolTvlNoH2O + stablepoolTvl + xykTvl + moneyMarketTvl
         
-        historicalData.push({
+        historicalDataAll.push({
           date,
-          omnipool: omnipoolTvl,
+          omnipool: omnipoolTvlAll,
           stableswap: stablepoolTvl,
           xyk: xykTvl,
           moneyMarket: moneyMarketTvl,
-          total,
+          total: totalAll,
           blockHeight
         })
         
-        console.log(`Block ${blockHeight} (${date.toISOString().split('T')[0]}): Omnipool $${omnipoolTvl.toFixed(2)}, Stablepool $${stablepoolTvl.toFixed(2)}, XYK $${xykTvl.toFixed(2)}, Money Market $${moneyMarketTvl.toFixed(2)}, Total $${total.toFixed(2)}`)
+        historicalDataNoH2O.push({
+          date,
+          omnipool: omnipoolTvlNoH2O,
+          stableswap: stablepoolTvl,
+          xyk: xykTvl,
+          moneyMarket: moneyMarketTvl,
+          total: totalNoH2O,
+          blockHeight
+        })
+        
+        console.log(`Block ${blockHeight} (${date.toISOString().split('T')[0]}): Omnipool All $${omnipoolTvlAll.toFixed(2)}, No H2O $${omnipoolTvlNoH2O.toFixed(2)}, Total All $${totalAll.toFixed(2)}, Total No H2O $${totalNoH2O.toFixed(2)}`)
       })
       
       // Sort by date
-      historicalData.sort((a, b) => a.date.getTime() - b.date.getTime())
+      historicalDataAll.sort((a, b) => a.date.getTime() - b.date.getTime())
+      historicalDataNoH2O.sort((a, b) => a.date.getTime() - b.date.getTime())
       
-      historicalTVLData.value = historicalData
-      console.log(`Stored ${historicalData.length} historical TVL data points`)
+      historicalTVLDataAll.value = historicalDataAll
+      historicalTVLDataNoH2O.value = historicalDataNoH2O
+      console.log(`Stored ${historicalDataAll.length} historical TVL data points (with and without H2O)`)
       
       // Build historical asset data for sparklines (use subset of blocks for sparklines)
-      const assetHistoryMap: { [assetId: string]: number[] } = {}
+      const assetHistoryMapAll: { [assetId: string]: number[] } = {}
+      const assetHistoryMapNoH2O: { [assetId: string]: number[] } = {}
       
       // Select subset of blocks for sparklines (15 points max)
       const sparklineBlocks = selectedBlocks.length <= sparklinePoints 
@@ -1088,41 +1178,54 @@ export const useDataStore = defineStore('data', () => {
             }
           })
         
-        // Add the combined TVL for each asset to the history map
+        // Add the combined TVL for each asset to both history maps
         Object.entries(blockAssetTvl).forEach(([assetIdStr, combinedTvl]) => {
-          if (!assetHistoryMap[assetIdStr]) {
-            assetHistoryMap[assetIdStr] = []
+          // Store in "All" version
+          if (!assetHistoryMapAll[assetIdStr]) {
+            assetHistoryMapAll[assetIdStr] = []
           }
-          assetHistoryMap[assetIdStr].push(combinedTvl)
+          assetHistoryMapAll[assetIdStr].push(combinedTvl)
+          
+          // Store in "No H2O" version (skip if H2O)
+          if (assetIdStr !== '1') {
+            if (!assetHistoryMapNoH2O[assetIdStr]) {
+              assetHistoryMapNoH2O[assetIdStr] = []
+            }
+            assetHistoryMapNoH2O[assetIdStr].push(combinedTvl)
+          }
         })
       })
       
-      historicalAssetData.value = assetHistoryMap
-      console.log(`Stored historical data for ${Object.keys(assetHistoryMap).length} assets`)
+      historicalAssetDataAll.value = assetHistoryMapAll
+      historicalAssetDataNoH2O.value = assetHistoryMapNoH2O
+      console.log(`Stored historical data for ${Object.keys(assetHistoryMapAll).length} assets (all) and ${Object.keys(assetHistoryMapNoH2O).length} assets (no H2O)`)
       
-      // Cache the data
+      // Cache the data (both versions)
       historicalDataCache.value[cacheKey] = {
-        tvlData: [...historicalData], // Create copy to avoid reference issues
-        assetData: { ...assetHistoryMap }, // Create copy to avoid reference issues
+        tvlDataAll: [...historicalDataAll],
+        tvlDataNoH2O: [...historicalDataNoH2O],
+        assetDataAll: { ...assetHistoryMapAll },
+        assetDataNoH2O: { ...assetHistoryMapNoH2O },
         timestamp: Date.now()
       }
       console.log(`Cached data for period: ${period}`)
       
       // Debug: Log specific assets we're looking for
       const debugAssets = ['1', '5', '10', '23', '1000765'] // Include tBTC
+      const activeAssetHistoryMap = showH2O.value ? assetHistoryMapAll : assetHistoryMapNoH2O
       debugAssets.forEach(assetId => {
-        if (assetHistoryMap[assetId]) {
+        if (activeAssetHistoryMap[assetId]) {
           const asset = assets.value.find(a => a.id === assetId)
-          console.log(`Asset ${assetId} (${asset?.symbol || 'Unknown'}): ${assetHistoryMap[assetId].length} data points`, assetHistoryMap[assetId])
+          console.log(`Asset ${assetId} (${asset?.symbol || 'Unknown'}): ${activeAssetHistoryMap[assetId].length} data points`, activeAssetHistoryMap[assetId])
         }
       })
       
       // Debug tBTC specifically if it exists
-      if (assetHistoryMap['1000765']) {
+      if (activeAssetHistoryMap['1000765']) {
         console.log('=== tBTC (1000765) Debug ===')
-        console.log('Data points:', assetHistoryMap['1000765'].length)
-        console.log('Values:', assetHistoryMap['1000765'])
-        const values = assetHistoryMap['1000765']
+        console.log('Data points:', activeAssetHistoryMap['1000765'].length)
+        console.log('Values:', activeAssetHistoryMap['1000765'])
+        const values = activeAssetHistoryMap['1000765']
         const min = Math.min(...values)
         const max = Math.max(...values)
         console.log(`Range: $${min.toLocaleString()} - $${max.toLocaleString()}`)
@@ -1138,7 +1241,7 @@ export const useDataStore = defineStore('data', () => {
           }
         }
       } else {
-        console.log('No tBTC (1000765) data found in historicalAssetData')
+        console.log('No tBTC (1000765) data found in active dataset')
       }
       
     } catch (err) {
@@ -1201,10 +1304,15 @@ export const useDataStore = defineStore('data', () => {
     historicalTVLData,
     historicalAssetData,
     historicalDataCache,
+    showH2O,
     // Computed
     tvlData,
     assetComposition,
     // Actions
+    setShowH2O: (value: boolean) => { 
+      showH2O.value = value 
+      console.log(`H2O toggle changed to: ${value} - switching data reactively`)
+    },
     fetchAllData,
     fetchAssets,
     fetchAllAssetsPaginated,

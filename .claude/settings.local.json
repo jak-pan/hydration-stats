@@ -9,7 +9,9 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:next-hydration.netlify.app)"
+      "WebFetch(domain:next-hydration.netlify.app)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }

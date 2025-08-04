@@ -39,10 +39,12 @@ export const GET_ALL_ASSETS = `
     assets(first: 2000) {
       nodes {
         id
+        assetRegistryId
         name
         symbol
         decimals
         assetType
+        multiLocationsMetadata
       }
     }
   }

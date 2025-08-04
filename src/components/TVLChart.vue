@@ -143,32 +143,7 @@ const createChart = () => {
           display: false
         },
         tooltip: {
-          callbacks: {
-            label: function(context) {
-              const value = context.parsed.y
-              const formatted = value >= 1e9 ? `$${(value / 1e9).toFixed(2)}B` :
-                              value >= 1e6 ? `$${(value / 1e6).toFixed(2)}M` :
-                              value >= 1e3 ? `$${(value / 1e3).toFixed(2)}K` :
-                              `$${value.toFixed(2)}`
-              return `${context.dataset.label}: ${formatted}`
-            },
-            footer: function(tooltipItems) {
-              const total = tooltipItems.reduce((sum, item) => sum + item.parsed.y, 0)
-              const formatted = total >= 1e9 ? `$${(total / 1e9).toFixed(2)}B` :
-                               total >= 1e6 ? `$${(total / 1e6).toFixed(2)}M` :
-                               total >= 1e3 ? `$${(total / 1e3).toFixed(2)}K` :
-                               `$${total.toFixed(2)}`
-              return `Total: ${formatted}`
-            }
-          },
-          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--surface-high').trim() || '#ffffff',
-          titleColor: getComputedStyle(document.documentElement).getPropertyValue('--text-high').trim() || '#1a1a1a',
-          bodyColor: getComputedStyle(document.documentElement).getPropertyValue('--text-high').trim() || '#1a1a1a',
-          footerColor: getComputedStyle(document.documentElement).getPropertyValue('--text-medium').trim() || '#808080',
-          borderColor: getComputedStyle(document.documentElement).getPropertyValue('--border-base').trim() || '#cccccc',
-          borderWidth: 1,
-          cornerRadius: 8,
-          padding: 12
+          enabled: false
         },
         legend: {
           display: false
