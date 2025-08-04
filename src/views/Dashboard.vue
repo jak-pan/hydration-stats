@@ -210,7 +210,7 @@
               </div>
               <div class="asset-identifiers">
                 <span class="asset-registry-id">
-                  Registry: {{ asset.asset?.assetRegistryId || asset.asset?.id }}
+                  Asset ID: {{ asset.asset?.assetRegistryId || asset.asset?.id }}
                 </span>
                 <span class="asset-contract-id" v-if="isERC20Asset(asset.asset?.assetType) && asset.asset?.id?.startsWith('0x')" 
                       :title="`Full contract address: ${asset.asset.id}`">
@@ -220,15 +220,60 @@
                 </span>
               </div>
               <div class="asset-pools">
+                <!-- Show non-XYK pools individually -->
                 <button
-                  v-for="(pool, index) in getPoolsFromAsset(asset)"
-                  :key="`${asset.asset?.id}-pool-${index}`"
-                  class="asset-pool-btn"
+                  v-for="(pool, index) in getNonXYKPools(asset)"
+                  :key="`${asset.asset?.id}-nonxyk-${index}`"
                   @click="handlePoolClick(pool, asset)"
-                  :title="`View ${pool} details`"
+                  class="asset-pool-btn"
+                  :class="getPoolColorClass(pool, asset)"
+                  :title="`View ${formatPoolName(pool)} details`"
                 >
-                  {{ pool }}
+                  {{ formatPoolName(pool) }}
                 </button>
+
+                <!-- Handle XYK pools -->
+                <div v-if="getXYKPools(asset).length > 0">
+                  <!-- Single XYK pool -->
+                  <button
+                    v-if="getXYKPools(asset).length === 1"
+                    @click="handlePoolClick(getXYKPools(asset)[0], asset)"
+                    class="asset-pool-btn pool-xyk"
+                    :title="`View ${formatPoolName(getXYKPools(asset)[0])} details`"
+                  >
+                    {{ formatPoolName(getXYKPools(asset)[0]) }}
+                  </button>
+
+                  <!-- Multiple XYK pools with expand/collapse -->
+                  <div v-else>
+                    <button
+                      v-if="!showAllPools[asset.asset?.assetRegistryId || asset.asset?.id || 'unknown']"
+                      @click="togglePoolList(asset.asset?.assetRegistryId || asset.asset?.id || 'unknown')"
+                      class="asset-pool-btn pool-summary expandable pool-xyk"
+                      :title="'Click to show all XYK pools'"
+                    >
+                      XYK ({{ getXYKPools(asset).length }}) <span class="expand-indicator">▼</span>
+                    </button>
+                    <div v-else class="expanded-xyk-pills">
+                      <button
+                        v-for="(pool, index) in getXYKPools(asset)"
+                        :key="`${asset.asset?.id}-xyk-${index}`"
+                        @click="handlePoolClick(pool, asset)"
+                        class="asset-pool-btn pool-xyk"
+                        :title="`View ${formatPoolName(pool)} details`"
+                      >
+                        {{ formatPoolName(pool) }}
+                      </button>
+                      <button
+                        @click="togglePoolList(asset.asset?.assetRegistryId || asset.asset?.id || 'unknown')"
+                        class="asset-pool-btn pool-collapse pool-xyk"
+                        title="Collapse XYK list"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="asset-stats">
@@ -364,6 +409,7 @@ const hoveredAssetData = ref<{
   value: number;
 } | null>(null);
 const showTooltip = ref<string | null>(null);
+const showAllPools = ref<Record<string, boolean>>({});
 
 const historicalDataWarning = computed(() => {
   if (!historicalTVLData.value.length) return null;
@@ -440,12 +486,12 @@ const filteredAssetComposition = computed(() => {
     );
   }
 
-  // Now we can safely combine assets by symbol since we've fixed the sparkline data aggregation
-  // The historical data now properly sums TVL from all sources for each asset
+  // Combine assets by assetRegistryId or assetId for proper aggregation
+  // This ensures assets with the same ID but different symbols are properly combined
   const combined = new Map<string, AssetComposition>();
 
   filtered.forEach((asset) => {
-    const key = asset.asset?.symbol || asset.asset?.id || "Unknown";
+    const key = asset.asset?.assetRegistryId || asset.asset?.id || "Unknown";
 
     if (combined.has(key)) {
       const existing = combined.get(key)!;
@@ -766,6 +812,77 @@ function formatContractAddress(address: string): string {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
   return address;
+}
+
+function formatPoolName(poolName: string): string {
+  // Remove token prefixes from money market pools
+  if (poolName.includes('Money Market')) {
+    return 'Money Market';
+  }
+  return poolName;
+}
+
+function getPoolSummary(asset: AssetComposition): string {
+  const pools = getPoolsFromAsset(asset);
+  const xykPools = pools.filter(pool => pool.includes('XYK'));
+  const otherPools = pools.filter(pool => !pool.includes('XYK'));
+  
+  const summary = [];
+  
+  // Add non-XYK pools as-is (formatted)
+  otherPools.forEach(pool => {
+    summary.push(formatPoolName(pool));
+  });
+  
+  // Add XYK pools as single entry if there are any
+  if (xykPools.length > 0) {
+    summary.push(`XYK (${xykPools.length})`);
+  }
+  
+  return summary.join(' + ');
+}
+
+function togglePoolList(assetKey: string) {
+  showAllPools.value[assetKey] = !showAllPools.value[assetKey];
+}
+
+function getNonXYKPools(asset: AssetComposition): string[] {
+  return getPoolsFromAsset(asset).filter(pool => !isXYKPool(pool, asset));
+}
+
+function getXYKPools(asset: AssetComposition): string[] {
+  return getPoolsFromAsset(asset).filter(pool => isXYKPool(pool, asset));
+}
+
+function isXYKPool(poolName: string, asset: AssetComposition): boolean {
+  // Check if this specific pool name looks like an XYK pool (contains " / ")
+  // XYK pools have names like "DOT / SUB", "NODL / DOT", etc.
+  return poolName.includes(' / ');
+}
+
+function getPoolColorClass(poolName: string, asset: AssetComposition): string {
+  // For combined pools, we need to determine color by pool name
+  // For single pools, we can use asset category
+  const lowerName = poolName.toLowerCase();
+  
+  if (lowerName.includes('omnipool')) return 'pool-omnipool';
+  if (lowerName.includes('money market') || lowerName.includes('moneymarket')) return 'pool-moneymarket';
+  if (lowerName.includes('stablepool') || lowerName.includes('stable') || poolName.includes('-Pool-')) return 'pool-stablepool';
+  if (poolName.includes(' / ')) return 'pool-xyk'; // XYK pools
+  
+  // Fallback to asset category for edge cases
+  switch (asset.category) {
+    case 'omnipool':
+      return 'pool-omnipool';
+    case 'stablepool':
+      return 'pool-stablepool';
+    case 'xyk':
+      return 'pool-xyk';
+    case 'moneymarket':
+      return 'pool-moneymarket';
+    default:
+      return 'pool-default';
+  }
 }
 
 
@@ -1228,7 +1345,6 @@ onMounted(() => {
 
 .contract-address-full {
   display: inline;
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1328,6 +1444,87 @@ onMounted(() => {
 .asset-pool-btn:active {
   transform: translateY(0);
   box-shadow: none;
+}
+
+/* Pool type color coding - matches chart fill colors */
+.pool-omnipool {
+  border-color: #4FACFE;
+  background: #4FACFE20; /* 12.5% opacity - matches chart fill */
+  color: #4FACFE;
+}
+
+.pool-omnipool:hover {
+  background: #4FACFE;
+  color: white;
+}
+
+.pool-stablepool {
+  border-color: #22C55E;
+  background: #22C55E20; /* 12.5% opacity - matches chart fill */
+  color: #22C55E;
+}
+
+.pool-stablepool:hover {
+  background: #22C55E;
+  color: white;
+}
+
+.pool-xyk {
+  border-color: #A855F7;
+  background: #A855F720; /* 12.5% opacity - matches chart fill */
+  color: #A855F7;
+}
+
+.pool-xyk:hover {
+  background: #A855F7;
+  color: white;
+}
+
+.pool-moneymarket {
+  border-color: #F59E0B;
+  background: #F59E0B20; /* 12.5% opacity - matches chart fill */
+  color: #F59E0B;
+}
+
+.pool-moneymarket:hover {
+  background: #F59E0B;
+  color: white;
+}
+
+.pool-default {
+  border-color: #6B7280;
+  background: #6B728020; /* Gray with opacity */
+  color: #6B7280;
+}
+
+.pool-default:hover {
+  background: #6B7280;
+  color: white;
+}
+
+/* Expand indicator */
+.expand-indicator {
+  font-size: 10px;
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.expandable:hover .expand-indicator {
+  transform: scale(1.1);
+}
+
+/* Collapse button width */
+.pool-collapse {
+  width: 48px;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+/* Expanded XYK pills wrapper */
+.expanded-xyk-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 
 .asset-stats {
@@ -1601,7 +1798,7 @@ onMounted(() => {
 
 @media (max-width: 1024px) {
   .tvl-content {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 250px 1fr;
     gap: var(--spacing-l);
   }
 }
@@ -1620,6 +1817,22 @@ onMounted(() => {
     border-bottom: 1px solid var(--border-base);
     padding-bottom: var(--spacing-l);
     margin-bottom: var(--spacing-l);
+  }
+
+  /* Make TVL breakdown more compact on mobile */
+  .tvl-breakdown {
+    height: auto;
+  }
+
+  .breakdown-items {
+    justify-content: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .breakdown-item {
+    padding: var(--spacing-xs) var(--spacing-s);
+    min-height: 32px;
+    flex: none;
   }
 
   /* Switch to stacked layout for asset type pills */

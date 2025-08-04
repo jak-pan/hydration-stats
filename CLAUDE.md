@@ -1,66 +1,101 @@
 # Hydration Stats Dashboard
 
 ## Project Overview
-A dashboard application to display statistics for the hydration.net chain using GraphQL endpoints.
+A Vue 3 + TypeScript dashboard application displaying real-time statistics for the Hydration.net blockchain using multiple GraphQL endpoints. Features interactive charts, mobile-responsive design, and comprehensive TVL tracking across different pool types.
 
-## Design Questions & Decisions
+## Tech Stack & Architecture
+- **Framework**: Vue 3 + TypeScript + Composition API
+- **Build Tool**: Vite
+- **Styling**: CSS with Hydration design tokens (system fonts for cross-browser compatibility)
+- **Charts**: Chart.js with date-fns adapter for time-series data
+- **State Management**: Pinia stores
+- **Router**: Vue Router 4
+- **Deployment**: Netlify (configured with netlify.toml)
 
-### API & Data
-- **GraphQL Endpoints**:
-  - LBP pools: `https://galacticcouncil.squids.live/hydration-storage-dictionary:lbppool-v2/api/graphql`
-  - XYK pools: `https://galacticcouncil.squids.live/hydration-storage-dictionary:xykpool-v2/api/graphql`
-  - Stableswaps: `https://galacticcouncil.squids.live/hydration-storage-dictionary:stablepool-v2/api/graphql`
-  - Omnipool and assets: `https://galacticcouncil.squids.live/hydration-storage-dictionary:omnipool-v2/api/graphql`
-  - Generic data (Assets, EMA Oracles, Aavepools): `https://galacticcouncil.squids.live/hydration-storage-dictionary:generic-data-v2/api/graphql`
-  - AAVE pools/Money Market: `https://galacticcouncil.squids.live/hydration-pools:whale-prod/api/graphql`
+## Key Features
+- **Real-time TVL tracking** across Omnipool, XYK, Stableswap, and Money Market
+- **Interactive charts** with hover states and mobile touch support
+- **Asset composition view** with sparklines and detailed breakdowns
+- **Mobile-responsive design** with collapsible sidebar and touch-friendly interactions
+- **H2O asset filtering** toggle for data analysis
+- **Multiple time periods** (1w, 1m, 3m) with historical data caching
+- **Logarithmic/linear scale** toggle for chart analysis
 
-- **Key Metrics**: 
-  - Overall TVL (Total Value Locked) - across Omnipool, XYK, Stableswap, Money Market
-  - Trading volume (24h, 7d, 30d) - from all pool types
-  - Trading pairs and their respective volumes
-  - Money market statistics:
-    - Borrow rates for assets (from aTokenTotalSupply/variableDebtTokenTotalSupply)
-    - Money market TVL (from AavepoolHistoricalData)
-    - Utilization rates per asset
-  - Specific pool TVLs and their composition
-  - (More metrics to be added later)
+## GraphQL Endpoints
+- **Omnipool & Assets**: `hydration-storage-dictionary:omnipool-v2`
+- **Stableswap Pools**: `hydration-storage-dictionary:stablepool-v2`  
+- **XYK Pools**: `hydration-storage-dictionary:xykpool-v2`
+- **Whale Indexer**: `hydration-pools:whale-prod` (Primary data source)
+- **Generic Data**: `hydration-storage-dictionary:generic-data-v2`
 
-- **Data Update Frequency**: Auto-refresh every minute
-- **Historical Data**: 
-  - Time-series charts for TVL and volumes over time
-  - Current stats for rates, utilization metrics
-  - Pie charts for current asset composition  
-  - Stacked line charts for asset composition changes over time
+All endpoints hosted at: `https://galacticcouncil.squids.live/`
 
-### Technology Stack
-- **Frontend Framework**: Simple Vue.js or Web Components
-- **Styling**: Plain CSS using Hydration design tokens from https://github.com/galacticcouncil/hydration-styles/blob/tertiary/tokens.json
-- **Design Reference**: https://next-hydration.netlify.app (match existing Hydration UI style)
-- **Charts/Visualization**: TradingView lightweight charts or Chart.js
-- **State Management**: Vue reactivity or simple JS state
-- **GraphQL Client**: Apollo Client (if compatible) or simple fetch with GraphQL
-- **Build Tool**: Vite or TypeScript compiler
-- **Deployment**: Static client-side only
+### Whale Indexer (`hydration-pools:whale-prod`)
+Primary data source providing:
+- **Historical Data**: All pool types (Omnipool, Stableswap, XYK, AAVE) with timestamps
+- **Block Information**: Block heights and timestamps for historical queries
+- **Asset Metadata**: Registry IDs, symbols, names, decimals, types
+- **USD Price Data**: Asset prices normalized to USD
+- **TVL Data**: Total Value Locked across all pool types
+- **EVM Asset Support**: Direct support for ERC20 contract addresses
+- **Money Market**: AAVE pool data with borrow rates and utilization
 
-### Dashboard Design
-- **Layout**: 
-  - Main page: TVL overview and asset composition (clean, not cluttered)
-  - Detail pages: Pool statistics, Money Market details, Trading stats
-  - Navigation: Sidebar menu (collapsible on mobile)
-  - Mobile-friendly responsive design
-- **Target Users**: Users, traders, liquidity providers, and Hydration team
-- **UX Approach**: Basic overview on landing page, detailed drill-down available
-- **Responsive Design**: Mobile-first approach
-- **Theme**: Match Hydration design system
+## Data Flow & Caching
+- **Auto-refresh**: Every 60 seconds for current data
+- **Historical caching**: Per-period caching (1w/1m/3m) with timestamp validation
+- **Asset aggregation**: Combines data by symbol, aggregates TVL from multiple sources
+- **Sparkline optimization**: Cached historical data for asset-level charts
 
-### Deployment & Build
-- **Hosting**: Vercel, Netlify, custom server, or other?
-- **Build Tool**: Vite, Create React App, Next.js, or other?
-- **Environment**: Development/staging/production setup needed?
+## File Structure
+```
+src/
+├── components/           # Reusable Vue components
+├── stores/              # Pinia state management
+├── views/               # Page-level components  
+├── utils/               # GraphQL queries and utilities
+├── types/               # TypeScript type definitions
+├── router/              # Vue Router configuration
+├── style.css            # Global styles
+└── tokens.css           # Hydration design tokens
+```
 
-## Questions for You
-1. What specific hydration chain statistics do you want to track? (e.g., transaction volume, validator stats, token metrics, network health)
-2. Do you have the GraphQL endpoint URLs and schema documentation ready?
-3. What's your preferred frontend tech stack?
-4. Who is the target audience for this dashboard?
-5. Any specific design requirements or existing brand guidelines?
+## Key Components
+- **Dashboard.vue**: Main page with TVL overview and asset composition
+- **TVLChart.vue**: Interactive stacked area chart with Chart.js
+- **Sparkline.vue**: Mini charts for individual assets
+- **Sidebar.vue**: Navigation with mobile support and auto-collapse
+- **Layout.vue**: App layout with mobile menu toggle
+
+## Development Commands
+```bash
+npm run dev          # Development server
+npm run build        # Production build  
+npm run typecheck    # TypeScript checking
+npm run preview      # Preview production build
+```
+
+## Mobile Features
+- **Mobile menu toggle**: Top-right hamburger button
+- **Touch events**: Chart hover reset on touch end/cancel
+- **Responsive layout**: Stacked elements, truncated text, optimized spacing
+- **Auto-collapse navigation**: Sidebar closes after menu item selection
+
+## Data Processing Notes
+- **Asset combining**: Groups assets by symbol, sums TVL from different sources
+- **H2O filtering**: Asset ID "1" can be toggled on/off for analysis
+- **Contract addresses**: ERC20 assets show truncated contract addresses
+- **Asset types**: Native, ERC20, Share, External, Bond classifications
+
+## Known Issues & TODOs
+- Missing sparklines for some pool types (stablepool, money market, XYK)
+- Asset composition charts (pie/stacked line) not yet implemented
+- Pool detail pages not yet built
+- Money market detail page with borrow rates pending
+
+## Recent Changes
+- Fixed mobile width overflow with proper CSS constraints
+- Implemented system font stack for cross-browser compatibility  
+- Added mobile touch event handling for charts
+- Fixed dual asset type pill display issue
+- Improved responsive asset type pill layout
+- Added mobile menu with auto-collapse functionality

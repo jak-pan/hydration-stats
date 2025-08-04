@@ -12,7 +12,13 @@
       "WebFetch(domain:next-hydration.netlify.app)",
       "Bash(npm run typecheck:*)",
       "Bash(npm run build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(timeout 10s npm run dev:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(npm view:*)",
+      "Bash(npm update:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
