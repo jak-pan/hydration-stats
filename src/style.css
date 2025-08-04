@@ -1,0 +1,69 @@
+/* Import Hydration design tokens */
+@import './tokens.css';
+
+body {
+  font-family: var(--font-secondary);
+  background-color: var(--surface-background);
+  color: var(--text-high);
+  line-height: var(--line-height-m);
+  font-size: var(--font-size-body);
+}
+
+/* Utility classes */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-l);
+}
+
+.card {
+  background: var(--surface-high);
+  border-radius: var(--radius-l);
+  padding: var(--spacing-xl);
+  box-shadow: var(--shadow-low);
+  border: var(--border-width-thin) solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-medium);
+}
+
+.btn {
+  padding: var(--spacing-s) var(--spacing-l);
+  border: none;
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  font-family: var(--font-secondary);
+}
+
+.btn-primary {
+  background: var(--surface-main-accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-primary);
+  color: var(--text-high);
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-xl);
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  line-height: var(--line-height-l);
+}
+
+h3 {
+  font-size: var(--font-size-h3);
+  line-height: var(--line-height-l);
+}

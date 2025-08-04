@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm run dev:*)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:next-hydration.netlify.app)"
+    ],
+    "deny": []
+  }
+}

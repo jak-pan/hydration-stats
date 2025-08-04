@@ -1,0 +1,103 @@
+/* Hydration Design Tokens */
+:root {
+  /* Base Colors */
+  --color-coral-900: #e53e76;
+  --color-sky-blue-500: #53a4f3;
+  --color-aubergine-900: #240E32;
+  --color-success-green-500: #74C742;
+  --color-azure-blue-500: #53a4f3;
+  --color-utility-red-500: #ff2c23;
+
+  /* Greys */
+  --color-greys-900: #1a1a1a;
+  --color-greys-800: #333333;
+  --color-greys-700: #4d4d4d;
+  --color-greys-600: #666666;
+  --color-greys-500: #808080;
+  --color-greys-400: #999999;
+  --color-greys-300: #b3b3b3;
+  --color-greys-200: #cccccc;
+  --color-greys-100: #e6e6e6;
+  --color-greys-50: #f3f3f3;
+
+  /* Theme Surface Colors */
+  --surface-background: #efedea; /* Matching reference beige */
+  --surface-high: #ffffff;
+  --surface-main: var(--color-greys-100);
+  --surface-main-accent: var(--color-coral-900);
+
+  /* Text Colors */
+  --text-high: #232226; /* Matching reference dark text */
+  --text-medium: var(--color-greys-500);
+  --text-low: var(--color-greys-400);
+
+  /* Font Families */
+  --font-primary: 'Gazpacho', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-secondary: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Font Sizes */
+  --font-size-base: 14px;
+  --font-size-h1: 32px;
+  --font-size-h2: 26px;
+  --font-size-h3: 21px;
+  --font-size-body: 16px;
+  --font-size-small: 12px;
+
+  /* Line Heights */
+  --line-height-xs: 12px;
+  --line-height-s: 15px;
+  --line-height-m: 18px;
+  --line-height-l: 21px;
+  --line-height-xl: 24px;
+
+  /* Corner Radius */
+  --radius-xxl: 32px;
+  --radius-xl: 16px;
+  --radius-l: 12px;
+  --radius-m: 8px;
+  --radius-base: 4px;
+
+  /* Paddings & Margins */
+  --spacing-xxxl: 32px;
+  --spacing-xxl: 24px;
+  --spacing-xl: 20px;
+  --spacing-l: 16px;
+  --spacing-m: 12px;
+  --spacing-s: 8px;
+  --spacing-xs: 4px;
+  --spacing-xxs: 2px;
+
+  /* Shadows */
+  --shadow-low: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-high: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+  /* Borders */
+  --border-width-thin: 1px;
+  --border-width-medium: 2px;
+  --border-color: var(--color-greys-200);
+  --border-base: var(--color-greys-200);
+}
+
+/* Dark Mode Theme - matching next-hydration.netlify.app */
+[data-theme="dark"] {
+  /* Theme Surface Colors */
+  --surface-background: #030816; /* Deep navy like reference */
+  --surface-high: #0f172a; /* Darker slate */
+  --surface-main: #1e293b; /* Medium slate */
+  --surface-main-accent: var(--color-coral-900);
+  
+  /* Text Colors */
+  --text-high: #ffffff; /* Pure white for better contrast */
+  --text-medium: #94a3b8; /* Slate gray */
+  --text-low: #64748b; /* Darker slate gray */
+  
+  /* Borders */
+  --border-color: #334155; /* Slate border */
+  --border-base: #334155;
+  
+  /* Shadows for dark mode */
+  --shadow-low: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-medium: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-high: 0 10px 15px rgba(0, 0, 0, 0.3);
+}
