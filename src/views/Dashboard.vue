@@ -192,17 +192,22 @@
             class="composition-item"
           >
             <div class="asset-info">
-              <div class="asset-symbol-with-type">
-                <span class="asset-symbol">{{
-                  asset.asset?.symbol || "Unknown"
+              <div class="asset-header">
+                <div class="asset-symbol-with-type">
+                  <span class="asset-symbol">{{
+                    asset.asset?.symbol || "Unknown"
+                  }}</span>
+                  <span class="asset-type desktop-pill" :class="getAssetTypeClass(asset.asset?.assetType)">
+                    {{ formatAssetType(asset.asset?.assetType) }}
+                  </span>
+                </div>
+                <span class="asset-name">{{
+                  asset.asset?.name || "Unknown Asset"
                 }}</span>
-                <span class="asset-type" :class="getAssetTypeClass(asset.asset?.assetType)">
+                <span class="asset-type mobile-pill" :class="getAssetTypeClass(asset.asset?.assetType)">
                   {{ formatAssetType(asset.asset?.assetType) }}
                 </span>
               </div>
-              <span class="asset-name">{{
-                asset.asset?.name || "Unknown Asset"
-              }}</span>
               <div class="asset-identifiers">
                 <span class="asset-registry-id">
                   Registry: {{ asset.asset?.assetRegistryId || asset.asset?.id }}
@@ -1006,6 +1011,8 @@ onMounted(() => {
   flex-direction: column;
   height: 300px;
   padding: var(--spacing-l) 0;
+  overflow: hidden;
+  width: 100%;
 }
 
 .tvl-breakdown-header {
@@ -1153,6 +1160,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .asset-symbol-with-type {
@@ -1166,15 +1176,35 @@ onMounted(() => {
   color: var(--text-high);
 }
 
+.asset-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  overflow: hidden;
+}
+
 .asset-name {
   font-size: var(--font-size-small);
   color: var(--text-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-pill {
+  display: none !important;
+}
+
+.desktop-pill {
+  display: inline-block;
 }
 
 .asset-identifiers {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
+  width: 100%;
 }
 
 .asset-registry-id,
@@ -1192,10 +1222,16 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .contract-address-full {
   display: inline;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contract-address-short {
@@ -1570,7 +1606,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
@@ -1584,6 +1620,27 @@ onMounted(() => {
     border-bottom: 1px solid var(--border-base);
     padding-bottom: var(--spacing-l);
     margin-bottom: var(--spacing-l);
+  }
+
+  /* Switch to stacked layout for asset type pills */
+  .desktop-pill {
+    display: none;
+  }
+
+  .mobile-pill {
+    display: inline-block !important;
+    align-self: flex-start;
+  }
+
+  /* Reorder asset stats on mobile - sparklines above values */
+  .asset-stats {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: var(--spacing-s);
+  }
+
+  .asset-values {
+    align-items: flex-end;
   }
 
   .dashboard-header {

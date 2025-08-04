@@ -1,5 +1,10 @@
 <template>
-  <div class="tvl-chart-container" @mouseleave="handleMouseLeave">
+  <div 
+    class="tvl-chart-container" 
+    @mouseleave="handleMouseLeave"
+    @touchend="handleTouchEnd"
+    @touchcancel="handleTouchEnd"
+  >
     <canvas ref="chartCanvas"></canvas>
   </div>
 </template>
@@ -61,6 +66,10 @@ const chartCanvas = ref<HTMLCanvasElement>()
 let chartInstance: Chart | null = null
 
 function handleMouseLeave() {
+  emit('hover', null)
+}
+
+function handleTouchEnd() {
   emit('hover', null)
 }
 

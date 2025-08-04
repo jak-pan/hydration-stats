@@ -18,7 +18,7 @@
 
     <ul class="nav-menu">
       <li>
-        <router-link to="/" class="nav-link" data-tooltip="Dashboard">
+        <router-link to="/" class="nav-link" data-tooltip="Dashboard" @click="handleNavClick">
           <svg
             class="nav-icon"
             viewBox="0 0 24 24"
@@ -34,7 +34,7 @@
         </router-link>
       </li>
       <li>
-        <router-link to="/pools" class="nav-link" data-tooltip="Pools">
+        <router-link to="/pools" class="nav-link" data-tooltip="Pools" @click="handleNavClick">
           <svg
             class="nav-icon"
             viewBox="0 0 24 24"
@@ -55,6 +55,7 @@
           to="/money-market"
           class="nav-link"
           data-tooltip="Money Market"
+          @click="handleNavClick"
         >
           <svg
             class="nav-icon"
@@ -71,7 +72,7 @@
         </router-link>
       </li>
       <li>
-        <router-link to="/trading" class="nav-link" data-tooltip="Trading">
+        <router-link to="/trading" class="nav-link" data-tooltip="Trading" @click="handleNavClick">
           <svg
             class="nav-icon"
             viewBox="0 0 24 24"
@@ -116,6 +117,14 @@ function handleMouseLeave() {
   }
 }
 
+function handleNavClick() {
+  // Collapse sidebar on mobile when nav item is clicked
+  if (window.innerWidth <= 768) {
+    isCollapsed.value = true;
+    isManuallyToggled.value = true;
+  }
+}
+
 // Sidebar should be expanded if:
 // 1. User manually expanded it, OR
 // 2. User hasn't manually toggled and is hovering (desktop only)
@@ -124,6 +133,11 @@ const shouldExpand = computed(() => {
     return !isCollapsed.value; // Respect manual toggle
   }
   return isHovering.value; // Auto-expand on hover
+});
+
+// Expose the toggle function for parent component
+defineExpose({
+  toggleSidebar
 });
 </script>
 

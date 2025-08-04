@@ -1,12 +1,22 @@
 /* Import Hydration design tokens */
 @import './tokens.css';
 
+/* Global box-sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   font-family: var(--font-secondary);
   background-color: var(--surface-background);
   color: var(--text-high);
   line-height: var(--line-height-m);
   font-size: var(--font-size-body);
+  margin: 0;
+  overflow-x: hidden;
+  min-width: 320px;
 }
 
 /* Utility classes */
