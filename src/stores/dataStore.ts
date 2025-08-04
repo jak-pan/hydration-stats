@@ -18,11 +18,11 @@ import {
   GET_ASSETS, 
   GET_ALL_ASSETS,
   GET_AAVE_POOLS, 
-  GET_OMNIPOOL_DATA,
   GET_ASSETS_BY_IDS,
   GET_EMA_ORACLES,
   EXPLORE_PRICE_DATA,
   GET_BLOCKS_WITH_TIMESTAMPS,
+  GET_BLOCK_BY_HEIGHT,
   GET_OMNIPOOL_WITH_ASSET_STATE,
   INTROSPECT_OMNIPOOL,
   INTROSPECT_ASSET,
@@ -37,11 +37,13 @@ import {
   GET_ASSET_SPOT_PRICES,
   GET_LATEST_ASSET_PRICES,
   GET_HISTORICAL_TVL_DATA,
+  GET_BLOCK_BY_TIMESTAMP,
   GET_OMNIPOOL_HISTORICAL_BY_BLOCKS,
   GET_STABLEPOOLS_HISTORICAL_BY_BLOCKS,
   GET_XYK_HISTORICAL_BY_BLOCKS,
   GET_AAVE_HISTORICAL_BY_BLOCKS
 } from '@/utils/graphql'
+import { deduplicatedRequest } from '@/utils/requestDeduplication'
 
 export const useDataStore = defineStore('data', () => {
   // State
@@ -471,7 +473,7 @@ export const useDataStore = defineStore('data', () => {
         let targetBlockHeight = blockHeight
         if (!targetBlockHeight) {
           console.log('Getting latest block height for price data...')
-          const latestBlockData = await aaveClient.request(GET_LATEST_BLOCK)
+          const latestBlockData = await deduplicatedRequest(aaveClient, GET_LATEST_BLOCK)
           targetBlockHeight = latestBlockData.assetHistoricalData.nodes[0].paraBlockHeight
           console.log(`Latest block height: ${targetBlockHeight}`)
         }
@@ -559,7 +561,7 @@ export const useDataStore = defineStore('data', () => {
   async function fetchAllAssetsPaginated() {
     try {
       console.log('Fetching all assets from whale indexer...')
-      const response = await aaveClient.request(GET_ALL_ASSETS)
+      const response = await deduplicatedRequest(aaveClient, GET_ALL_ASSETS)
       
       console.log(`Fetched ${response.assets.nodes.length} assets`)
       
@@ -636,7 +638,7 @@ export const useDataStore = defineStore('data', () => {
   async function fetchAavePools() {
     try {
       console.log('Fetching AAVE pools...')
-      const response = await aaveClient.request(GET_AAVE_POOLS)
+      const response = await deduplicatedRequest(aaveClient, GET_AAVE_POOLS)
       console.log('AAVE response:', response)
       aavePools.value = response.aavepoolHistoricalData.nodes
     } catch (err) {
@@ -648,30 +650,20 @@ export const useDataStore = defineStore('data', () => {
   async function fetchBlockTimestamp(blockHeight: number) {
     try {
       console.log(`Fetching timestamp for block ${blockHeight} from whale indexer...`)
-      const response = await aaveClient.request(GET_BLOCKS_WITH_TIMESTAMPS)
-      console.log('Blocks response:', response)
+      const response = await aaveClient.request(GET_BLOCK_BY_HEIGHT, { blockHeight })
+      console.log('Block response:', response)
       
-      // Find the block that matches our height or is closest
+      // Check if we found the specific block
       if (response.blocks?.nodes?.length > 0) {
-        const matchingBlock = response.blocks.nodes.find((block: any) => 
-          block.height === blockHeight
-        )
-        
-        if (matchingBlock && matchingBlock.timestamp) {
+        const block = response.blocks.nodes[0]
+        if (block && block.timestamp) {
           if (latestBlockInfo.value) {
-            latestBlockInfo.value.timestamp = new Date(matchingBlock.timestamp)
+            latestBlockInfo.value.timestamp = new Date(block.timestamp)
             console.log('Found block timestamp:', latestBlockInfo.value.timestamp)
           }
-        } else {
-          // Use the latest available timestamp as approximation
-          const latestBlock = response.blocks.nodes[0]
-          if (latestBlock && latestBlock.timestamp) {
-            if (latestBlockInfo.value) {
-              latestBlockInfo.value.timestamp = new Date(latestBlock.timestamp)
-              console.log('Using latest available timestamp:', latestBlockInfo.value.timestamp)
-            }
-          }
         }
+      } else {
+        console.log(`Block ${blockHeight} not found, will use estimated timestamp`)
       }
     } catch (err) {
       console.log('Failed to fetch block timestamp from whale indexer:', err)
@@ -685,12 +677,12 @@ export const useDataStore = defineStore('data', () => {
       // If no block height provided, get the latest
       let targetBlockHeight = blockHeight
       if (!targetBlockHeight) {
-        const latestBlockData = await aaveClient.request(GET_LATEST_BLOCK)
+        const latestBlockData = await deduplicatedRequest(aaveClient, GET_LATEST_BLOCK)
         targetBlockHeight = latestBlockData.assetHistoricalData.nodes[0].paraBlockHeight
         console.log(`Using latest block height: ${targetBlockHeight}`)
       }
       
-      const response = await aaveClient.request(GET_XYK_POOLS_FROM_BLOCK, {
+      const response = await deduplicatedRequest(aaveClient, GET_XYK_POOLS_FROM_BLOCK, {
         blockHeight: targetBlockHeight
       })
       console.log('XYK pool response from whale indexer:', response)
@@ -726,12 +718,12 @@ export const useDataStore = defineStore('data', () => {
       // If no block height provided, get the latest
       let targetBlockHeight = blockHeight
       if (!targetBlockHeight) {
-        const latestBlockData = await aaveClient.request(GET_LATEST_BLOCK)
+        const latestBlockData = await deduplicatedRequest(aaveClient, GET_LATEST_BLOCK)
         targetBlockHeight = latestBlockData.assetHistoricalData.nodes[0].paraBlockHeight
         console.log(`Using latest block height: ${targetBlockHeight}`)
       }
       
-      const response = await aaveClient.request(GET_STABLEPOOLS_FROM_BLOCK, {
+      const response = await deduplicatedRequest(aaveClient, GET_STABLEPOOLS_FROM_BLOCK, {
         blockHeight: targetBlockHeight
       })
       console.log('Stablepool response from whale indexer:', response)
@@ -770,12 +762,12 @@ export const useDataStore = defineStore('data', () => {
       // If no block height provided, get the latest
       let targetBlockHeight = blockHeight
       if (!targetBlockHeight) {
-        const latestBlockData = await aaveClient.request(GET_LATEST_BLOCK)
+        const latestBlockData = await deduplicatedRequest(aaveClient, GET_LATEST_BLOCK)
         targetBlockHeight = latestBlockData.assetHistoricalData.nodes[0].paraBlockHeight
         console.log(`Using latest block height: ${targetBlockHeight}`)
       }
       
-      const response = await aaveClient.request(GET_OMNIPOOL_FROM_BLOCK, {
+      const response = await deduplicatedRequest(aaveClient, GET_OMNIPOOL_FROM_BLOCK, {
         blockHeight: targetBlockHeight
       })
       console.log('Omnipool response from whale indexer:', response)
@@ -839,6 +831,7 @@ export const useDataStore = defineStore('data', () => {
   async function fetchHistoricalTVLData(period: '1w' | '1m' | '3m' = '1m') {
     try {
       historicalDataLoading.value = true
+      
       // Check cache first (cache for 5 minutes)
       const cacheKey = period
       const cached = historicalDataCache.value[cacheKey]
@@ -854,365 +847,320 @@ export const useDataStore = defineStore('data', () => {
         return
       }
       
-      console.log(`Fetching historical TVL data for period: ${period}`)
+      console.log(`🎯 PRECISE: Fetching historical TVL data for period: ${period}`)
       
-      // Calculate date range and intervals
+      // Calculate time points for the chart
       const now = new Date()
-      let fromDate: Date
-      let mainChartPoints = 50
-      let sparklinePoints = 15
-      let intervalHours: number
+      let daysBack: number 
+      let sampleSize: number
       
       switch (period) {
         case '1w':
-          fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          intervalHours = Math.ceil((7 * 24) / mainChartPoints) // ~3.5 hours, round to 4
-          intervalHours = 4
-          break
+          daysBack = 7
+          sampleSize = 50  // ~7 samples per day
+          break  
         case '1m':
-          fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-          intervalHours = Math.ceil((30 * 24) / mainChartPoints) // ~14.4 hours, round to 12
-          intervalHours = 12
+          daysBack = 30
+          sampleSize = 60  // ~2 samples per day
           break
         case '3m':
-          fromDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-          intervalHours = Math.ceil((90 * 24) / mainChartPoints) // ~43.2 hours, round to 48 (2 days)
-          intervalHours = 48
+          daysBack = 90  
+          sampleSize = 90  // ~1 sample per day
           break
         default:
-          fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-          intervalHours = 12
+          daysBack = 30
+          sampleSize = 60
       }
       
-      // Generate time points aligned to hour boundaries
-      const timePoints: Date[] = []
-      let currentTime = new Date(fromDate)
+      const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000)
+      const interval = (now.getTime() - startDate.getTime()) / (sampleSize - 1)
       
-      // Align to start of hour
-      currentTime.setMinutes(0, 0, 0)
+      console.log(`Period: ${period}, ${sampleSize} points, ${(interval / (1000 * 60 * 60)).toFixed(2)}h intervals`)
       
-      while (currentTime <= now && timePoints.length < mainChartPoints) {
-        timePoints.push(new Date(currentTime))
-        currentTime = new Date(currentTime.getTime() + intervalHours * 60 * 60 * 1000)
+      // STEP 1: Generate evenly spaced timestamps
+      const timestamps: Date[] = []
+      for (let i = 0; i < sampleSize; i++) {
+        timestamps.push(new Date(startDate.getTime() + i * interval))
       }
       
-      // Ensure we have the latest time point
-      if (timePoints.length > 0 && timePoints[timePoints.length - 1].getTime() < now.getTime() - 60 * 60 * 1000) {
-        timePoints.push(new Date(now.getTime()))
-      }
+      console.log(`📊 Fetching blocks for ${timestamps.length} precise timestamps...`)
       
-      console.log(`Generated ${timePoints.length} time points with ${intervalHours}h intervals`)
+      // STEP 2: Fetch blocks closest to each timestamp (the efficient way!)
+      const blocks: any[] = []
+      const batchSize = 10 // Process in batches to avoid overwhelming the API
       
-      // Use the first and last time points for GraphQL query range
-      const queryFromDate = timePoints[0]
-      const queryToDate = timePoints[timePoints.length - 1]
-      
-      // Format dates for GraphQL (ISO format)
-      const fromDateStr = queryFromDate.toISOString()
-      const toDateStr = queryToDate.toISOString()
-      
-      console.log(`Date range: ${fromDateStr} to ${toDateStr}`)
-      
-      // Get blocks for the date range
-      const blocksResponse = await aaveClient.request(GET_HISTORICAL_TVL_DATA, {
-        fromDate: fromDateStr,
-        toDate: toDateStr
-      })
-      
-      console.log(`Found ${blocksResponse.blocks.nodes.length} blocks in date range`)
-      
-      // Debug: Check the actual date range of returned blocks
-      if (blocksResponse.blocks.nodes.length > 0) {
-        const sortedBlocks = [...blocksResponse.blocks.nodes].sort((a: any, b: any) => 
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        )
-        const firstBlock = sortedBlocks[0]
-        const lastBlock = sortedBlocks[sortedBlocks.length - 1]
-        const actualStart = new Date(firstBlock.timestamp)
-        const actualEnd = new Date(lastBlock.timestamp)
+      for (let i = 0; i < timestamps.length; i += batchSize) {
+        const batch = timestamps.slice(i, i + batchSize)
         
-        console.log(`Actual block range: ${actualStart.toISOString()} to ${actualEnd.toISOString()}`)
-        console.log(`Requested: ${fromDateStr} to ${toDateStr}`)
-        
-        // If we don't have enough historical data, adjust our time points
-        if (actualStart.getTime() > queryFromDate.getTime()) {
-          console.warn(`Historical data only available from ${actualStart.toISOString()}, adjusting time points...`)
-          
-          // Recalculate time points based on actual available data
-          const actualDuration = actualEnd.getTime() - actualStart.getTime()
-          const actualPoints = Math.min(mainChartPoints, Math.floor(actualDuration / (intervalHours * 60 * 60 * 1000)))
-          
-          timePoints.length = 0 // Clear existing points
-          currentTime = new Date(actualStart)
-          currentTime.setMinutes(0, 0, 0)
-          
-          while (currentTime <= actualEnd && timePoints.length < actualPoints) {
-            timePoints.push(new Date(currentTime))
-            currentTime = new Date(currentTime.getTime() + intervalHours * 60 * 60 * 1000)
-          }
-          
-          console.log(`Adjusted to ${timePoints.length} time points based on available data`)
-        }
-      }
-      
-      // Find the closest blocks to our target time points
-      const selectedBlocks: { height: number, timestamp: string }[] = []
-      // Sort blocks by timestamp to ensure chronological order
-      const allBlocks = [...blocksResponse.blocks.nodes].sort((a: any, b: any) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      )
-      
-      timePoints.forEach(targetTime => {
-        // Find the block closest to this time point
-        let closestBlock = null
-        let closestDiff = Infinity
-        
-        allBlocks.forEach((block: any) => {
-          const blockTime = new Date(block.timestamp)
-          const diff = Math.abs(blockTime.getTime() - targetTime.getTime())
-          if (diff < closestDiff) {
-            closestDiff = diff
-            closestBlock = block
+        const batchPromises = batch.map(async (timestamp) => {
+          try {
+            const response = await deduplicatedRequest(aaveClient, GET_BLOCK_BY_TIMESTAMP, {
+              targetTime: timestamp.toISOString()
+            })
+            return response.blocks.nodes[0] || null
+          } catch (error) {
+            console.error(`Error fetching block for ${timestamp.toISOString()}:`, error)
+            return null
           }
         })
         
-        if (closestBlock && !selectedBlocks.find(b => b.height === closestBlock.height)) {
-          selectedBlocks.push({
-            height: closestBlock.height,
-            timestamp: closestBlock.timestamp
-          })
-        }
-      })
-      
-      // Ensure we have the latest block as the last point
-      if (selectedBlocks.length > 0) {
-        const latestBlockData = await aaveClient.request(GET_LATEST_BLOCK)
-        const latestBlock = latestBlockData.assetHistoricalData.nodes[0]
-        
-        // Replace the last block with the latest block if it's more recent
-        const lastSelected = selectedBlocks[selectedBlocks.length - 1]
-        if (latestBlock.paraBlockHeight > lastSelected.height) {
-          selectedBlocks[selectedBlocks.length - 1] = {
-            height: latestBlock.paraBlockHeight,
-            timestamp: new Date().toISOString()
-          }
-        }
+        const batchResults = await Promise.all(batchPromises)
+        blocks.push(...batchResults.filter(Boolean))
       }
-      const blockHeights = selectedBlocks.map(block => block.height)
       
-      console.log(`Selected ${selectedBlocks.length} daily blocks:`, blockHeights)
+      // Remove duplicates (same block might be closest to multiple timestamps)
+      const uniqueBlocks = new Map<number, any>()
+      blocks.forEach(block => {
+        if (block) uniqueBlocks.set(block.height, block)
+      })
+      const finalBlocks = Array.from(uniqueBlocks.values()).sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      )
       
-      // Fetch historical data for all selected blocks in parallel
-      const [omnipoolHist, stablepoolHist, xykHist, aaveHist] = await Promise.all([
-        aaveClient.request(GET_OMNIPOOL_HISTORICAL_BY_BLOCKS, { blockHeights }),
-        aaveClient.request(GET_STABLEPOOLS_HISTORICAL_BY_BLOCKS, { blockHeights }),
-        aaveClient.request(GET_XYK_HISTORICAL_BY_BLOCKS, { blockHeights }),
-        aaveClient.request(GET_AAVE_HISTORICAL_BY_BLOCKS, { blockHeights })
+      console.log(`✅ PRECISE: Fetched ${finalBlocks.length} blocks (instead of thousands!)`)
+      
+      if (finalBlocks.length === 0) {
+        console.warn('No blocks found in date range')
+        historicalTVLDataAll.value = []
+        historicalTVLDataNoH2O.value = []
+        historicalAssetDataAll.value = {}
+        historicalAssetDataNoH2O.value = {}
+        return
+      }
+      
+      // Extract block heights for the data queries
+      const blockHeights = finalBlocks.map((block: any) => block.height)
+      console.log(`Block heights: ${blockHeights.slice(0, 5)}...${blockHeights.slice(-2)}`)
+      
+      // STEP 2: Fetch actual data for these specific blocks (parallel with deduplication)
+      const [omnipoolData, stablepoolData, xykData, aaveData] = await Promise.all([
+        deduplicatedRequest(aaveClient, GET_OMNIPOOL_HISTORICAL_BY_BLOCKS, { blockHeights }),
+        deduplicatedRequest(aaveClient, GET_STABLEPOOLS_HISTORICAL_BY_BLOCKS, { blockHeights }),
+        deduplicatedRequest(aaveClient, GET_XYK_HISTORICAL_BY_BLOCKS, { blockHeights }),
+        deduplicatedRequest(aaveClient, GET_AAVE_HISTORICAL_BY_BLOCKS, { blockHeights })
       ])
       
-      console.log('Historical data fetched:', {
-        omnipool: omnipoolHist.omnipoolAssetHistoricalData.nodes.length,
-        stablepool: stablepoolHist.stableswapHistoricalData.nodes.length,
-        xyk: xykHist.xykpoolHistoricalData.nodes.length,
-        aave: aaveHist.aavepoolHistoricalData.nodes.length
+      console.log('Sampled data received:', {
+        omnipool: omnipoolData.omnipoolAssetHistoricalData?.nodes?.length || 0,
+        stablepool: stablepoolData.stableswapHistoricalData?.nodes?.length || 0,
+        xyk: xykData.xykpoolHistoricalData?.nodes?.length || 0,
+        aave: aaveData.aavepoolHistoricalData?.nodes?.length || 0
       })
       
-      // Process data by block height
-      const historicalDataAll: HistoricalTVLData[] = []
-      const historicalDataNoH2O: HistoricalTVLData[] = []
+      // Create a map of block heights to timestamps
+      const blockTimestamps = new Map<number, string>()
+      finalBlocks.forEach((block: any) => {
+        blockTimestamps.set(block.height, block.timestamp)
+      })
       
-      selectedBlocks.forEach(block => {
-        const blockHeight = block.height
-        const date = new Date(block.timestamp)
+      // Group data by block height to create time series
+      const blockMap = new Map<number, {
+        omnipool: number
+        omnipoolNoH2O: number
+        stableswap: number
+        xyk: number
+        moneyMarket: number
+        assetTvls: { [assetId: string]: number }
+        timestamp: string
+      }>()
+      
+      // Process Omnipool data
+      omnipoolData.omnipoolAssetHistoricalData?.nodes?.forEach((node: any) => {
+        const blockHeight = node.paraBlockHeight
+        const assetId = String(node.assetId)
+        const tvl = parseFloat(node.tvlInRefAssetNorm || '0')
         
-        // Calculate Omnipool TVL for this block (all assets)
-        const omnipoolNodes = omnipoolHist.omnipoolAssetHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
+        if (!blockMap.has(blockHeight)) {
+          blockMap.set(blockHeight, {
+            omnipool: 0,
+            omnipoolNoH2O: 0,
+            stableswap: 0,
+            xyk: 0,
+            moneyMarket: 0,
+            assetTvls: {},
+            timestamp: blockTimestamps.get(blockHeight) || new Date().toISOString()
+          })
+        }
         
-        const omnipoolTvlAll = omnipoolNodes
-          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
+        const blockData = blockMap.get(blockHeight)!
+        blockData.omnipool += tvl
         
-        const omnipoolTvlNoH2O = omnipoolNodes
-          .filter((node: any) => String(node.assetId) !== '1') // Exclude H2O
-          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
+        // Add to NoH2O version if not H2O asset
+        if (assetId !== '1') {
+          blockData.omnipoolNoH2O += tvl
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + tvl
+        } else if (assetId === '1') {
+          // For H2O, add to All version asset data
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + tvl
+        }
+      })
+      
+      // Process Stablepool data
+      stablepoolData.stableswapHistoricalData?.nodes?.forEach((poolNode: any) => {
+        const blockHeight = poolNode.paraBlockHeight
+        const poolTvl = parseFloat(poolNode.tvlTotalInRefAssetNorm || '0')
         
-        // Calculate Stablepool TVL for this block
-        const stablepoolTvl = stablepoolHist.stableswapHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlTotalInRefAssetNorm || '0'), 0)
+        if (!blockMap.has(blockHeight)) {
+          blockMap.set(blockHeight, {
+            omnipool: 0,
+            omnipoolNoH2O: 0,
+            stableswap: 0,
+            xyk: 0,
+            moneyMarket: 0,
+            assetTvls: {},
+            timestamp: blockTimestamps.get(blockHeight) || new Date().toISOString()
+          })
+        }
         
-        // Calculate XYK TVL for this block
-        const xykTvl = xykHist.xykpoolHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
+        const blockData = blockMap.get(blockHeight)!
+        blockData.stableswap += poolTvl
         
-        // Calculate Money Market TVL for this block
-        const moneyMarketTvl = aaveHist.aavepoolHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .reduce((sum: number, node: any) => sum + parseFloat(node.tvlInRefAssetNorm || '0'), 0)
+        // Process individual assets
+        poolNode.stableswapAssetHistoricalDataByPoolHistoricalDataId?.nodes?.forEach((assetNode: any) => {
+          const assetId = String(assetNode.assetId)
+          const assetTvl = parseFloat(assetNode.tvlInRefAssetNorm || '0')
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + assetTvl
+        })
+      })
+      
+      // Process XYK data
+      xykData.xykpoolHistoricalData?.nodes?.forEach((node: any) => {
+        const blockHeight = node.paraBlockHeight
+        const poolTvl = parseFloat(node.tvlInRefAssetNorm || '0')
         
-        const totalAll = omnipoolTvlAll + stablepoolTvl + xykTvl + moneyMarketTvl
-        const totalNoH2O = omnipoolTvlNoH2O + stablepoolTvl + xykTvl + moneyMarketTvl
+        if (!blockMap.has(blockHeight)) {
+          blockMap.set(blockHeight, {
+            omnipool: 0,
+            omnipoolNoH2O: 0,
+            stableswap: 0,
+            xyk: 0,
+            moneyMarket: 0,
+            assetTvls: {},
+            timestamp: blockTimestamps.get(blockHeight) || new Date().toISOString()
+          })
+        }
         
-        historicalDataAll.push({
-          date,
-          omnipool: omnipoolTvlAll,
-          stableswap: stablepoolTvl,
-          xyk: xykTvl,
-          moneyMarket: moneyMarketTvl,
+        const blockData = blockMap.get(blockHeight)!
+        blockData.xyk += poolTvl
+        
+        // Split pool TVL between the two assets
+        const assetATvl = poolTvl / 2
+        const assetBTvl = poolTvl / 2
+        
+        if (node.assetAId) {
+          const assetId = String(node.assetAId)
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + assetATvl
+        }
+        if (node.assetBId) {
+          const assetId = String(node.assetBId)
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + assetBTvl
+        }
+      })
+      
+      // Process AAVE/Money Market data
+      aaveData.aavepoolHistoricalData?.nodes?.forEach((node: any) => {
+        const blockHeight = node.paraBlockHeight
+        const tvl = parseFloat(node.tvlInRefAssetNorm || '0')
+        
+        if (!blockMap.has(blockHeight)) {
+          blockMap.set(blockHeight, {
+            omnipool: 0,
+            omnipoolNoH2O: 0,
+            stableswap: 0,
+            xyk: 0,
+            moneyMarket: 0,
+            assetTvls: {},
+            timestamp: blockTimestamps.get(blockHeight) || new Date().toISOString()
+          })
+        }
+        
+        const blockData = blockMap.get(blockHeight)!
+        blockData.moneyMarket += tvl
+        
+        if (node.pool?.reserveAsset?.id) {
+          const assetId = String(node.pool.reserveAsset.id)
+          blockData.assetTvls[assetId] = (blockData.assetTvls[assetId] || 0) + tvl
+        }
+      })
+      
+      // Convert to time series arrays (sorted by block height)
+      const sortedBlocks = Array.from(blockMap.keys()).sort((a, b) => a - b)
+      
+      const optimizedResult = {
+        tvlDataAll: [] as HistoricalTVLData[],
+        tvlDataNoH2O: [] as HistoricalTVLData[],
+        assetDataAll: {} as { [assetId: string]: number[] },
+        assetDataNoH2O: {} as { [assetId: string]: number[] }
+      }
+      
+      sortedBlocks.forEach((blockHeight, index) => {
+        const blockData = blockMap.get(blockHeight)!
+        
+        // Use actual timestamp from the block (no estimation needed!)
+        const actualTimestamp = new Date(blockData.timestamp)
+        
+        const totalAll = blockData.omnipool + blockData.stableswap + blockData.xyk + blockData.moneyMarket
+        const totalNoH2O = blockData.omnipoolNoH2O + blockData.stableswap + blockData.xyk + blockData.moneyMarket
+        
+        optimizedResult.tvlDataAll.push({
+          date: actualTimestamp,
+          omnipool: blockData.omnipool,
+          stableswap: blockData.stableswap,
+          xyk: blockData.xyk,
+          moneyMarket: blockData.moneyMarket,
           total: totalAll,
           blockHeight
         })
         
-        historicalDataNoH2O.push({
-          date,
-          omnipool: omnipoolTvlNoH2O,
-          stableswap: stablepoolTvl,
-          xyk: xykTvl,
-          moneyMarket: moneyMarketTvl,
+        optimizedResult.tvlDataNoH2O.push({
+          date: actualTimestamp,
+          omnipool: blockData.omnipoolNoH2O,
+          stableswap: blockData.stableswap,
+          xyk: blockData.xyk,
+          moneyMarket: blockData.moneyMarket,
           total: totalNoH2O,
           blockHeight
         })
         
-        console.log(`Block ${blockHeight} (${date.toISOString().split('T')[0]}): Omnipool All $${omnipoolTvlAll.toFixed(2)}, No H2O $${omnipoolTvlNoH2O.toFixed(2)}, Total All $${totalAll.toFixed(2)}, Total No H2O $${totalNoH2O.toFixed(2)}`)
-      })
-      
-      // Sort by date
-      historicalDataAll.sort((a, b) => a.date.getTime() - b.date.getTime())
-      historicalDataNoH2O.sort((a, b) => a.date.getTime() - b.date.getTime())
-      
-      historicalTVLDataAll.value = historicalDataAll
-      historicalTVLDataNoH2O.value = historicalDataNoH2O
-      console.log(`Stored ${historicalDataAll.length} historical TVL data points (with and without H2O)`)
-      
-      // Build historical asset data for sparklines (use subset of blocks for sparklines)
-      const assetHistoryMapAll: { [assetId: string]: number[] } = {}
-      const assetHistoryMapNoH2O: { [assetId: string]: number[] } = {}
-      
-      // Select subset of blocks for sparklines (15 points max)
-      const sparklineBlocks = selectedBlocks.length <= sparklinePoints 
-        ? selectedBlocks 
-        : selectedBlocks.filter((_, index) => {
-            const step = selectedBlocks.length / sparklinePoints
-            return index % Math.floor(step) === 0
-          }).slice(0, sparklinePoints)
-      
-      console.log(`Using ${sparklineBlocks.length} blocks for sparklines out of ${selectedBlocks.length} total blocks`)
-      
-      sparklineBlocks.forEach(block => {
-        const blockHeight = block.height
-        
-        // Collect TVL data for each asset from all sources for this block
-        const blockAssetTvl: { [assetId: string]: number } = {}
-        
-        // Process Omnipool assets
-        omnipoolHist.omnipoolAssetHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .forEach((node: any) => {
-            const assetIdStr = String(node.assetId)
-            const tvlUsd = parseFloat(node.tvlInRefAssetNorm || '0')
-            
-            if (!blockAssetTvl[assetIdStr]) {
-              blockAssetTvl[assetIdStr] = 0
-            }
-            blockAssetTvl[assetIdStr] += tvlUsd
-          })
-        
-        // Process Stablepool assets
-        stablepoolHist.stableswapHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .forEach((poolNode: any) => {
-            if (poolNode.stableswapAssetHistoricalDataByPoolHistoricalDataId?.nodes) {
-              poolNode.stableswapAssetHistoricalDataByPoolHistoricalDataId.nodes.forEach((assetNode: any) => {
-                const assetIdStr = String(assetNode.assetId)
-                const tvlUsd = parseFloat(assetNode.tvlInRefAssetNorm || '0')
-                
-                if (!blockAssetTvl[assetIdStr]) {
-                  blockAssetTvl[assetIdStr] = 0
-                }
-                blockAssetTvl[assetIdStr] += tvlUsd
-              })
-            }
-          })
-        
-        // Process Money Market assets
-        aaveHist.aavepoolHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .forEach((node: any) => {
-            if (node.pool?.reserveAsset?.id) {
-              const assetIdStr = String(node.pool.reserveAsset.id)
-              const tvlUsd = parseFloat(node.tvlInRefAssetNorm || '0')
-              
-              if (!blockAssetTvl[assetIdStr]) {
-                blockAssetTvl[assetIdStr] = 0
-              }
-              blockAssetTvl[assetIdStr] += tvlUsd
-            }
-          })
-        
-        // Process XYK pools
-        xykHist.xykpoolHistoricalData.nodes
-          .filter((node: any) => node.paraBlockHeight === blockHeight)
-          .forEach((node: any) => {
-            const poolTvl = parseFloat(node.tvlInRefAssetNorm || '0')
-            
-            // Add both assets from the pool (split TVL equally)
-            if (node.assetAId) {
-              const assetIdStr = String(node.assetAId)
-              const tvlUsd = poolTvl / 2
-              
-              if (!blockAssetTvl[assetIdStr]) {
-                blockAssetTvl[assetIdStr] = 0
-              }
-              blockAssetTvl[assetIdStr] += tvlUsd
-            }
-            
-            if (node.assetBId) {
-              const assetIdStr = String(node.assetBId)
-              const tvlUsd = poolTvl / 2
-              
-              if (!blockAssetTvl[assetIdStr]) {
-                blockAssetTvl[assetIdStr] = 0
-              }
-              blockAssetTvl[assetIdStr] += tvlUsd
-            }
-          })
-        
-        // Add the combined TVL for each asset to both history maps
-        Object.entries(blockAssetTvl).forEach(([assetIdStr, combinedTvl]) => {
-          // Store in "All" version
-          if (!assetHistoryMapAll[assetIdStr]) {
-            assetHistoryMapAll[assetIdStr] = []
-          }
-          assetHistoryMapAll[assetIdStr].push(combinedTvl)
+        // Build asset time series
+        Object.entries(blockData.assetTvls).forEach(([assetId, tvl]) => {
+          // All version
+          if (!optimizedResult.assetDataAll[assetId]) optimizedResult.assetDataAll[assetId] = []
+          optimizedResult.assetDataAll[assetId].push(tvl)
           
-          // Store in "No H2O" version (skip if H2O)
-          if (assetIdStr !== '1') {
-            if (!assetHistoryMapNoH2O[assetIdStr]) {
-              assetHistoryMapNoH2O[assetIdStr] = []
-            }
-            assetHistoryMapNoH2O[assetIdStr].push(combinedTvl)
+          // NoH2O version (exclude H2O asset)
+          if (assetId !== '1') {
+            if (!optimizedResult.assetDataNoH2O[assetId]) optimizedResult.assetDataNoH2O[assetId] = []
+            optimizedResult.assetDataNoH2O[assetId].push(tvl)
           }
         })
       })
       
-      historicalAssetDataAll.value = assetHistoryMapAll
-      historicalAssetDataNoH2O.value = assetHistoryMapNoH2O
-      console.log(`Stored historical data for ${Object.keys(assetHistoryMapAll).length} assets (all) and ${Object.keys(assetHistoryMapNoH2O).length} assets (no H2O)`)
+      console.log(`Processed ${sortedBlocks.length} blocks into time series`)
+      console.log(`Assets tracked: ${Object.keys(optimizedResult.assetDataAll).length} (all), ${Object.keys(optimizedResult.assetDataNoH2O).length} (no H2O)`)
       
-      // Cache the data (both versions)
+      // Update store state with optimized results
+      historicalTVLDataAll.value = optimizedResult.tvlDataAll
+      historicalTVLDataNoH2O.value = optimizedResult.tvlDataNoH2O
+      historicalAssetDataAll.value = optimizedResult.assetDataAll
+      historicalAssetDataNoH2O.value = optimizedResult.assetDataNoH2O
+      
+      console.log(`✅ OPTIMIZED: Stored ${optimizedResult.tvlDataAll.length} historical TVL data points`)
+      console.log(`✅ OPTIMIZED: Stored historical data for ${Object.keys(optimizedResult.assetDataAll).length} assets (all) and ${Object.keys(optimizedResult.assetDataNoH2O).length} assets (no H2O)`)
+      
+      // Cache the optimized data
       historicalDataCache.value[cacheKey] = {
-        tvlDataAll: [...historicalDataAll],
-        tvlDataNoH2O: [...historicalDataNoH2O],
-        assetDataAll: { ...assetHistoryMapAll },
-        assetDataNoH2O: { ...assetHistoryMapNoH2O },
+        tvlDataAll: [...optimizedResult.tvlDataAll],
+        tvlDataNoH2O: [...optimizedResult.tvlDataNoH2O],
+        assetDataAll: { ...optimizedResult.assetDataAll },
+        assetDataNoH2O: { ...optimizedResult.assetDataNoH2O },
         timestamp: Date.now()
       }
-      console.log(`Cached data for period: ${period}`)
+      console.log(`💾 OPTIMIZED: Cached data for period: ${period}`)
       
       // Debug: Log specific assets we're looking for
       const debugAssets = ['1', '5', '10', '23', '1000765'] // Include tBTC
-      const activeAssetHistoryMap = showH2O.value ? assetHistoryMapAll : assetHistoryMapNoH2O
+      const activeAssetHistoryMap = showH2O.value ? optimizedResult.assetDataAll : optimizedResult.assetDataNoH2O
       debugAssets.forEach(assetId => {
         if (activeAssetHistoryMap[assetId]) {
           const asset = assets.value.find(a => a.id === assetId)
@@ -1220,32 +1168,8 @@ export const useDataStore = defineStore('data', () => {
         }
       })
       
-      // Debug tBTC specifically if it exists
-      if (activeAssetHistoryMap['1000765']) {
-        console.log('=== tBTC (1000765) Debug ===')
-        console.log('Data points:', activeAssetHistoryMap['1000765'].length)
-        console.log('Values:', activeAssetHistoryMap['1000765'])
-        const values = activeAssetHistoryMap['1000765']
-        const min = Math.min(...values)
-        const max = Math.max(...values)
-        console.log(`Range: $${min.toLocaleString()} - $${max.toLocaleString()}`)
-        console.log(`Ratio: ${(max/min).toFixed(2)}x`)
-        
-        // Check for extreme jumps
-        for (let i = 1; i < values.length; i++) {
-          const prev = values[i-1]
-          const curr = values[i]
-          const changePercent = Math.abs(curr - prev) / prev * 100
-          if (changePercent > 50) {
-            console.log(`⚠️ Jump at index ${i}: ${changePercent.toFixed(1)}% ($${prev.toLocaleString()} → $${curr.toLocaleString()})`)
-          }
-        }
-      } else {
-        console.log('No tBTC (1000765) data found in active dataset')
-      }
-      
     } catch (err) {
-      console.error('Error fetching historical TVL data:', err)
+      console.error('Error fetching optimized historical TVL data:', err)
       error.value = 'Failed to fetch historical TVL data'
     } finally {
       historicalDataLoading.value = false

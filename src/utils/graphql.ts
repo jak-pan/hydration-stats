@@ -18,33 +18,54 @@ export const lbpClient = new GraphQLClient(ENDPOINTS.LBP)
 export const genericClient = new GraphQLClient(ENDPOINTS.GENERIC)
 export const aaveClient = new GraphQLClient(ENDPOINTS.AAVE)
 
-// GraphQL Queries - Fixed based on actual schema
+// GraphQL Fragments for reusable field sets
+const ASSET_CORE_FIELDS = `
+  fragment AssetCoreFields on Asset {
+    id
+    symbol
+    name
+    decimals
+  }
+`
+
+const ASSET_EXTENDED_FIELDS = `
+  fragment AssetExtendedFields on Asset {
+    id
+    assetRegistryId
+    symbol
+    name
+    decimals
+    assetType
+  }
+`
+
+const BLOCK_FIELDS = `
+  fragment BlockFields on Block {
+    height
+    timestamp
+  }
+`
+
+// Optimized GraphQL Queries with fragments and minimal fields
 export const GET_ASSETS = `
+  ${ASSET_CORE_FIELDS}
   query GetAssets {
     assets(first: 1000) {
       nodes {
-        id
-        name
-        symbol
-        decimals
+        ...AssetCoreFields
         assetType
       }
     }
   }
 `
 
-// Query to get all assets with a much higher limit
+// Query to get all assets with minimal required fields
 export const GET_ALL_ASSETS = `
+  ${ASSET_EXTENDED_FIELDS}
   query GetAllAssets {
     assets(first: 2000) {
       nodes {
-        id
-        assetRegistryId
-        name
-        symbol
-        decimals
-        assetType
-        multiLocationsMetadata
+        ...AssetExtendedFields
       }
     }
   }
@@ -66,6 +87,7 @@ export const GET_ASSETS_BY_IDS = `
 `
 
 export const GET_AAVE_POOLS = `
+  ${ASSET_CORE_FIELDS}
   query GetAavePools {
     aavepoolHistoricalData(
       first: 10
@@ -73,23 +95,14 @@ export const GET_AAVE_POOLS = `
     ) {
       nodes {
         id
+        tvlInRefAssetNorm
+        aTokenTotalSupply
         pool {
           id
           reserveAsset {
-            id
-            symbol
-            name
-          }
-          aToken {
-            id
-            symbol
-            name
+            ...AssetCoreFields
           }
         }
-        aTokenTotalSupply
-        variableDebtTokenTotalSupply
-        tvlInRefAssetNorm
-        paraBlockHeight
       }
     }
   }
@@ -163,6 +176,21 @@ export const GET_BLOCKS_WITH_TIMESTAMPS = `
   }
 `
 
+// Query to get a specific block by height (more efficient than fetching latest 10)
+export const GET_BLOCK_BY_HEIGHT = `
+  query GetBlockByHeight($blockHeight: Int!) {
+    blocks(
+      filter: { height: { equalTo: $blockHeight } }
+      first: 1
+    ) {
+      nodes {
+        height
+        timestamp
+      }
+    }
+  }
+`
+
 // Query to explore price historical data in whale indexer
 export const EXPLORE_PRICE_SCHEMA = `
   query ExplorePriceSchema {
@@ -196,98 +224,75 @@ export const GET_LATEST_BLOCK = `
 
 // Query to get all assets from a specific block (latest prices only)
 export const GET_ASSETS_FROM_BLOCK = `
+  ${ASSET_CORE_FIELDS}
   query GetAssetsFromBlock($blockHeight: Int!) {
     assetHistoricalData(
       filter: { paraBlockHeight: { equalTo: $blockHeight } }
     ) {
       nodes {
-        id
         assetId
         assetRegistryId
         usdPriceNormalised
-        paraBlockHeight
         asset {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get Omnipool data from a specific block (from whale indexer)
 export const GET_OMNIPOOL_FROM_BLOCK = `
+  ${ASSET_CORE_FIELDS}
   query GetOmnipoolFromBlock($blockHeight: Int!) {
     omnipoolAssetHistoricalData(
       filter: { paraBlockHeight: { equalTo: $blockHeight } }
     ) {
       nodes {
-        id
         assetId
         freeBalance
-        assetHubReserve
-        assetShares
-        assetProtocolShares
         tvlInRefAssetNorm
-        paraBlockHeight
         asset {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get Stablepool data from a specific block (from whale indexer)
 export const GET_STABLEPOOLS_FROM_BLOCK = `
+  ${ASSET_CORE_FIELDS}
   query GetStablepoolsFromBlock($blockHeight: Int!) {
     stableswapHistoricalData(
       filter: { paraBlockHeight: { equalTo: $blockHeight } }
     ) {
       nodes {
-        id
         poolId
         tvlTotalInRefAssetNorm
-        fee
-        paraBlockHeight
         pool {
-          id
-          shareTokenId
           shareToken {
-            id
-            symbol
-            name
+            ...AssetCoreFields
           }
         }
         stableswapAssetHistoricalDataByPoolHistoricalDataId {
           nodes {
-            id
             assetId
             freeBalance
             tvlInRefAssetNorm
             asset {
-              id
-              symbol
-              name
-              decimals
+              ...AssetCoreFields
             }
           }
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get XYK pool data from a specific block (from whale indexer)
 export const GET_XYK_POOLS_FROM_BLOCK = `
+  ${ASSET_CORE_FIELDS}
   query GetXYKPoolsFromBlock($blockHeight: Int!) {
     xykpoolHistoricalData(
       filter: { 
@@ -296,28 +301,19 @@ export const GET_XYK_POOLS_FROM_BLOCK = `
       }
     ) {
       nodes {
-        id
         poolId
         assetAId
         assetBId
         assetABalance
         assetBBalance
         tvlInRefAssetNorm
-        paraBlockHeight
         assetA {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
         assetB {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
@@ -427,31 +423,26 @@ export const GET_ASSET_SPOT_PRICES = `
 
 // Alternative query to get more asset prices with filter
 export const GET_LATEST_ASSET_PRICES = `
+  ${ASSET_CORE_FIELDS}
   query GetLatestAssetPrices {
     assetHistoricalData(
-      first: 5000
+      first: 1000
       filter: { usdPriceNormalised: { greaterThan: "0" } }
       orderBy: PARA_BLOCK_HEIGHT_DESC
     ) {
       nodes {
-        id
         assetId
         assetRegistryId
         usdPriceNormalised
-        paraBlockHeight
         asset {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
 
-// Query to get historical TVL data for the past 30 days
+// Query to get historical blocks and timestamps (restored working version)
 export const GET_HISTORICAL_TVL_DATA = `
   query GetHistoricalTVLData($fromDate: Datetime!, $toDate: Datetime!) {
     blocks(
@@ -474,64 +465,74 @@ export const GET_HISTORICAL_TVL_DATA = `
   }
 `
 
+// Query to get block closest to a specific timestamp (the efficient approach!)
+export const GET_BLOCK_BY_TIMESTAMP = `
+  query GetBlockByTimestamp($targetTime: Datetime!) {
+    blocks(
+      filter: { 
+        timestamp: { 
+          lessThanOrEqualTo: $targetTime
+        }
+      }
+      first: 1
+      orderBy: TIMESTAMP_DESC
+    ) {
+      nodes {
+        height
+        timestamp
+      }
+    }
+  }
+`
+
 // Query to get Omnipool historical data for specific blocks
 export const GET_OMNIPOOL_HISTORICAL_BY_BLOCKS = `
+  ${ASSET_CORE_FIELDS}
   query GetOmnipoolHistoricalByBlocks($blockHeights: [Int!]!) {
     omnipoolAssetHistoricalData(
       filter: { paraBlockHeight: { in: $blockHeights } }
       orderBy: PARA_BLOCK_HEIGHT_ASC
     ) {
       nodes {
-        id
         assetId
-        freeBalance
         tvlInRefAssetNorm
         paraBlockHeight
         asset {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get Stablepool historical data for specific blocks
 export const GET_STABLEPOOLS_HISTORICAL_BY_BLOCKS = `
+  ${ASSET_CORE_FIELDS}
   query GetStablepoolsHistoricalByBlocks($blockHeights: [Int!]!) {
     stableswapHistoricalData(
       filter: { paraBlockHeight: { in: $blockHeights } }
       orderBy: PARA_BLOCK_HEIGHT_ASC
     ) {
       nodes {
-        id
-        poolId
         tvlTotalInRefAssetNorm
         paraBlockHeight
         stableswapAssetHistoricalDataByPoolHistoricalDataId {
           nodes {
-            id
             assetId
             tvlInRefAssetNorm
             asset {
-              id
-              symbol
-              name
-              decimals
+              ...AssetCoreFields
             }
           }
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get XYK pool historical data for specific blocks
 export const GET_XYK_HISTORICAL_BY_BLOCKS = `
+  ${ASSET_CORE_FIELDS}
   query GetXYKHistoricalByBlocks($blockHeights: [Int!]!) {
     xykpoolHistoricalData(
       filter: { 
@@ -541,52 +542,135 @@ export const GET_XYK_HISTORICAL_BY_BLOCKS = `
       orderBy: PARA_BLOCK_HEIGHT_ASC
     ) {
       nodes {
-        id
-        poolId
         assetAId
         assetBId
         tvlInRefAssetNorm
         paraBlockHeight
         assetA {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
         assetB {
-          id
-          symbol
-          name
-          decimals
+          ...AssetCoreFields
         }
       }
-      totalCount
     }
   }
 `
 
 // Query to get Money Market (AAVE) historical data for specific blocks
 export const GET_AAVE_HISTORICAL_BY_BLOCKS = `
+  ${ASSET_CORE_FIELDS}
   query GetAAVEHistoricalByBlocks($blockHeights: [Int!]!) {
     aavepoolHistoricalData(
       filter: { paraBlockHeight: { in: $blockHeights } }
       orderBy: PARA_BLOCK_HEIGHT_ASC
     ) {
       nodes {
-        id
         tvlInRefAssetNorm
         paraBlockHeight
         pool {
-          id
           reserveAsset {
-            id
-            symbol
-            name
-            decimals
+            ...AssetCoreFields
           }
         }
       }
-      totalCount
+    }
+  }
+`
+
+// ===== OPTIMIZED HISTORICAL DATA QUERIES =====
+// These queries eliminate the need to fetch all blocks and timestamps first
+// Instead, they sample data at regular intervals using GraphQL's built-in pagination
+
+export const GET_OMNIPOOL_HISTORICAL_SAMPLED = `
+  ${ASSET_CORE_FIELDS}
+  query GetOmnipoolHistoricalSampled($sampleSize: Int!, $minBlockHeight: Int) {
+    omnipoolAssetHistoricalData(
+      first: $sampleSize
+      filter: { paraBlockHeight: { greaterThan: $minBlockHeight } }
+      orderBy: PARA_BLOCK_HEIGHT_DESC
+    ) {
+      nodes {
+        assetId
+        tvlInRefAssetNorm
+        paraBlockHeight
+        asset {
+          ...AssetCoreFields
+        }
+      }
+    }
+  }
+`
+
+export const GET_STABLEPOOLS_HISTORICAL_SAMPLED = `
+  ${ASSET_CORE_FIELDS}
+  query GetStablepoolsHistoricalSampled($sampleSize: Int!, $minBlockHeight: Int) {
+    stableswapHistoricalData(
+      first: $sampleSize
+      filter: { paraBlockHeight: { greaterThan: $minBlockHeight } }
+      orderBy: PARA_BLOCK_HEIGHT_DESC
+    ) {
+      nodes {
+        tvlTotalInRefAssetNorm
+        paraBlockHeight
+        stableswapAssetHistoricalDataByPoolHistoricalDataId {
+          nodes {
+            assetId
+            tvlInRefAssetNorm
+            asset {
+              ...AssetCoreFields
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+export const GET_XYK_HISTORICAL_SAMPLED = `
+  ${ASSET_CORE_FIELDS}
+  query GetXYKHistoricalSampled($sampleSize: Int!, $minBlockHeight: Int) {
+    xykpoolHistoricalData(
+      first: $sampleSize
+      filter: { 
+        paraBlockHeight: { greaterThan: $minBlockHeight },
+        tvlInRefAssetNorm: { greaterThan: "10" }
+      }
+      orderBy: PARA_BLOCK_HEIGHT_DESC
+    ) {
+      nodes {
+        assetAId
+        assetBId
+        tvlInRefAssetNorm
+        paraBlockHeight
+        assetA {
+          ...AssetCoreFields
+        }
+        assetB {
+          ...AssetCoreFields
+        }
+      }
+    }
+  }
+`
+
+export const GET_AAVE_HISTORICAL_SAMPLED = `
+  ${ASSET_CORE_FIELDS}
+  query GetAAVEHistoricalSampled($sampleSize: Int!, $minBlockHeight: Int) {
+    aavepoolHistoricalData(
+      first: $sampleSize
+      filter: { paraBlockHeight: { greaterThan: $minBlockHeight } }
+      orderBy: PARA_BLOCK_HEIGHT_DESC
+    ) {
+      nodes {
+        tvlInRefAssetNorm
+        paraBlockHeight
+        pool {
+          reserveAsset {
+            ...AssetCoreFields
+          }
+        }
+      }
     }
   }
 `
